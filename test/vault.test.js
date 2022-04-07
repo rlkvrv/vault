@@ -21,6 +21,10 @@ describe("Vault", function () {
     expect(await vault.maxDeposit(acc1.address)).eq(maxUint);
   });
 
+  it("maxMint should be return maxUint", async function () {
+    expect(await vault.maxMint(acc1.address)).eq(maxUint);
+  });
+
   it("convertToShares should be return 100", async function () {
     expect(await vault.convertToShares(100)).eq(100);
   });
@@ -49,7 +53,7 @@ describe("Vault", function () {
   });
 
   it("redeem should be correct work", async function () {
-    await vault.deposit(1000, acc1.address);
+    await vault.mint(1000, acc1.address);
     await vault.approve(acc2.address, 100);
     await vault.connect(acc2).redeem(50, acc2.address, acc1.address);
     expect(await token.balanceOf(acc2.address)).eq(50);

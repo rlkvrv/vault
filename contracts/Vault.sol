@@ -37,6 +37,18 @@ contract Vault is ERC20 {
         return type(uint256).max;
     }
 
+    function maxMint(address) external pure returns (uint256) {
+        return type(uint256).max;
+    }
+
+    function maxWithdraw(address owner) external view returns (uint256 assets) {
+        return convertToAssets(balanceOf(owner));
+    }
+
+    function maxRedeem(address owner) external view returns (uint256 shares) {
+        return balanceOf(owner);
+    }
+
     function deposit(uint256 assets, address receiver)
         external
         returns (uint256 shares)
@@ -50,12 +62,25 @@ contract Vault is ERC20 {
         emit Deposit(msg.sender, receiver, assets, shares);
     }
 
+    function mint(uint256 shares, address receiver)
+        external
+        returns (uint256 assets)
+    {
+        require((assets = previewMint(shares)) != 0, "Vault: ZERO_ASSETS");
+
+        asset.safeTransferFrom(msg.sender, address(this), assets);
+
+        _mint(receiver, shares);
+
+        emit Deposit(msg.sender, receiver, assets, shares);
+    }
+
     function withdraw(
         uint256 assets,
         address receiver,
         address owner
     ) external returns (uint256 shares) {
-        shares = convertToShares(assets);
+        shares = previewWithdraw(assets);
         if (msg.sender != owner) {
             _spendAllowance(owner, receiver, assets);
         }
@@ -72,7 +97,7 @@ contract Vault is ERC20 {
         address receiver,
         address owner
     ) external returns (uint256 assets) {
-        require((assets = convertToAssets(shares)) != 0, "Vault: ZERO_ASSETS");
+        require((assets = previewRedeem(shares)) != 0, "Vault: ZERO_ASSETS");
 
         if (msg.sender != owner) {
             _spendAllowance(owner, receiver, assets);
@@ -119,11 +144,33 @@ contract Vault is ERC20 {
         return convertToShares(assets);
     }
 
-    function maxWithdraw(address owner) public view returns (uint256 assets) {
-        return convertToAssets(balanceOf(owner));
+    function previewMint(uint256 shares) public view returns (uint256 assets) {
+        uint256 totalSupply = totalSupply();
+        uint256 numerator = shares * totalAssets();
+        uint256 isZero = (numerator) == 0 ? 0 : 1;
+
+        return
+            totalSupply == 0
+                ? shares
+                : (((numerator - 1) / totalSupply) + 1) * isZero;
     }
 
-    function maxRedeem(address owner) public view returns (uint256 shares) {
-        return balanceOf(owner);
+    function previewRedeem(uint256 shares)
+        public
+        view
+        returns (uint256 assets)
+    {
+        return convertToAssets(shares);
+    }
+
+    function previewWithdraw(uint256 assets) public view returns (uint256) {
+        uint256 totalSupply = totalSupply();
+        uint256 numerator = assets * totalSupply;
+        uint256 isZero = (numerator) == 0 ? 0 : 1;
+
+        return
+            totalSupply == 0
+                ? assets
+                : (((numerator - 1) / totalAssets()) + 1) * isZero;
     }
 }
