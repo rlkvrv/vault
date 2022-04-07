@@ -4,11 +4,11 @@ pragma solidity 0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "./interfaces/IVault.sol";
 
 import "hardhat/console.sol";
+import "./interfaces/IVault.sol";
 
-contract Vault is ERC20 {
+contract Vault is IVault, ERC20 {
     using SafeERC20 for ERC20;
 
     ERC20 public immutable asset;
@@ -32,6 +32,10 @@ contract Vault is ERC20 {
         uint256 assets,
         uint256 shares
     );
+
+    function token() external view returns (address wantToken) {
+        return address(asset);
+    }
 
     function maxDeposit(address) external pure returns (uint256) {
         return type(uint256).max;
