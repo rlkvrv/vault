@@ -13,9 +13,12 @@ contract Vault is IVault, ERC20 {
 
     ERC20 public immutable asset;
     uint256 public totalDebt;
+    address public strategy;
+    address management;
 
     constructor(ERC20 _asset) ERC20("ShareToken", "SHT") {
         asset = _asset;
+        management = msg.sender;
     }
 
     event Deposit(
@@ -32,6 +35,15 @@ contract Vault is IVault, ERC20 {
         uint256 assets,
         uint256 shares
     );
+
+    event StrategyAdded(address strategy);
+
+    event UpdateManagement(address management);
+
+    modifier onlyAuthorized() {
+        require(msg.sender == management);
+        _;
+    }
 
     function token() external view returns (address wantToken) {
         return address(asset);
@@ -112,6 +124,18 @@ contract Vault is IVault, ERC20 {
         emit Withdraw(msg.sender, receiver, owner, assets, shares);
 
         asset.safeTransfer(receiver, assets);
+    }
+
+    function addStategy(address _strategy) external onlyAuthorized {
+        strategy = _strategy;
+
+        emit StrategyAdded(strategy);
+    }
+
+    function updateManagement(address _management) external onlyAuthorized {
+        management = _management;
+
+        emit UpdateManagement(management);
     }
 
     function totalAssets() public view returns (uint256 totalManagedAssets) {
