@@ -36,6 +36,11 @@ contract Strategy {
         _;
     }
 
+    modifier onlyKeepers() {
+        require(msg.sender == keeper || msg.sender == strategist);
+        _;
+    }
+
     function _initialize(
         address _vault,
         address _strategist,
@@ -45,7 +50,7 @@ contract Strategy {
 
         vault = IVault(_vault);
         want = ERC20(vault.token());
-        // SafeERC20.safeApprove(want, _vault, type(uint256).max); // Give Vault unlimited access (might save gas)
+        SafeERC20.safeApprove(want, _vault, type(uint256).max);
         strategist = _strategist;
         keeper = _keeper;
 
@@ -54,8 +59,6 @@ contract Strategy {
         // maxReportDelay = 86400;
         // profitFactor = 100;
         // debtThreshold = 0;
-
-        // vault.approve(rewards, type(uint256).max); // Allow rewards to be pulled
     }
 
     function setStrategist(address _strategist) external onlyAuthorized {
@@ -68,5 +71,44 @@ contract Strategy {
         require(_keeper != address(0));
         keeper = _keeper;
         emit UpdatedKeeper(_keeper);
+    }
+
+    function withdraw(uint256 _amountNeeded) external returns (uint256 _loss) {
+        require(msg.sender == address(vault), "Strategy: !vault");
+        // Liquidate as much as possible to `want`, up to `_amountNeeded`
+        uint256 amountFreed = want.balanceOf(address(this)); // TODO
+        // (amountFreed, _loss) = liquidatePosition(_amountNeeded);
+        // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
+        SafeERC20.safeTransfer(want, msg.sender, amountFreed);
+        // NOTE: Reinvest anything leftover on next `tend`/`harvest`
+    }
+
+    function prepareReturn(uint256 _debtOutstanding)
+        internal
+        virtual
+        returns (
+            uint256 _profit,
+            uint256 _loss,
+            uint256 _debtPayment
+        )
+    {}
+
+    function harvest() external onlyKeepers {
+        uint256 profit;
+        uint256 loss;
+        uint256 debtOutstanding = vault.debtOutstanding(address(this));
+        uint256 debtPayment;
+
+        (profit, loss, debtPayment) = prepareReturn(debtOutstanding);
+
+        // Allow Vault to take up to the "harvested" balance of this contract,
+        // which is the amount it has earned since the last time it reported to
+        // the Vault.
+        debtOutstanding = vault.report(profit, loss, debtPayment);
+
+        // Check if free returns are left, and re-invest them
+        // adjustPosition(debtOutstanding);
+
+        emit Harvested(profit, loss, debtPayment, debtOutstanding);
     }
 }
