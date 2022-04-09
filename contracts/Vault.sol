@@ -14,7 +14,6 @@ contract Vault is IVault, ERC20 {
 
     ERC20 public immutable asset;
     uint256 public totalDebt;
-    address public strategy;
     address public management;
 
     struct StrategyParams {
@@ -49,6 +48,17 @@ contract Vault is IVault, ERC20 {
     );
 
     event StrategyAdded(address strategy, uint256 performanceFee);
+
+    event StrategyReported(
+        address strategy,
+        uint256 gain,
+        uint256 loss,
+        uint256 debtPayment,
+        uint256 totalGain,
+        uint256 totalLoss,
+        uint256 totalDebt,
+        uint256 credit
+    );
 
     event UpdateManagement(address management);
 
@@ -165,9 +175,58 @@ contract Vault is IVault, ERC20 {
         uint256 gain,
         uint256 loss,
         uint256 _debtPayment
-    ) external returns (uint256) {}
+    ) external returns (uint256 debt) {
+        require(
+            strategies[msg.sender].activation > 0,
+            "Vault: ONLY_APPROVED_STRATEGY"
+        );
+        uint256 credit = asset.balanceOf(address(this));
 
-    function debtOutstanding(address _strategy) external view returns (uint256) {
+        if (credit > 0) {
+            asset.safeTransfer(msg.sender, credit);
+            strategies[msg.sender].totalDebt += credit;
+            totalDebt += credit;
+        }
+
+        debt = debtOutstanding(msg.sender);
+
+        // if (_debtPayment > 0) {
+        //     strategies[msg.sender].totalDebt -= _debtPayment;
+        //     totalDebt -= _debtPayment;
+        // }
+
+        // if (credit > 0) {
+        //     strategies[msg.sender].totalDebt += credit;
+        //     totalDebt += credit;
+        // }
+
+        // uint256 totalAvail = gain + _debtPayment;
+
+        // if (totalAvail < credit) {
+        //     asset.safeTransfer(msg.sender, credit - totalAvail);
+        // } else if (totalAvail > credit) {
+        //     asset.safeTransferFrom(
+        //         msg.sender,
+        //         address(this),
+        //         totalAvail - credit
+        //     );
+        // }
+
+        // debt = debtOutstanding(msg.sender);
+
+        emit StrategyReported(
+            msg.sender,
+            gain,
+            loss,
+            _debtPayment,
+            strategies[msg.sender].totalGain,
+            strategies[msg.sender].totalLoss,
+            strategies[msg.sender].totalDebt,
+            credit
+        );
+    }
+
+    function debtOutstanding(address _strategy) public view returns (uint256) {
         return strategies[_strategy].totalDebt;
     }
 
