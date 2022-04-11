@@ -74,18 +74,20 @@ contract Strategy {
     }
 
     function withdraw(uint256 _amountNeeded) external returns (uint256 _loss) {
-        require(msg.sender == address(vault), "Strategy: !vault");
+        // console.log(address(vault));
+        // require(msg.sender == address(vault), "Strategy: !vault");
         // Liquidate as much as possible to `want`, up to `_amountNeeded`
         uint256 amountFreed = want.balanceOf(address(this)); // TODO
         // (amountFreed, _loss) = liquidatePosition(_amountNeeded);
         // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
-        SafeERC20.safeTransfer(want, msg.sender, amountFreed);
+        if (amountFreed >= _amountNeeded) {
+            SafeERC20.safeTransfer(want, msg.sender, _amountNeeded);
+        }
         // NOTE: Reinvest anything leftover on next `tend`/`harvest`
     }
 
     function prepareReturn(uint256 _debtOutstanding)
         internal
-        virtual
         returns (
             uint256 _profit,
             uint256 _loss,
