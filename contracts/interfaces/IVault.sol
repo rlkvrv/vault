@@ -37,8 +37,7 @@ interface IVault {
 
     function report(
         uint256 gain,
-        uint256 loss,
-        uint256 _debtPayment
+        uint256 loss
     ) external returns (uint256);
 
     function debtOutstanding(address _strategy) external view returns (uint256);

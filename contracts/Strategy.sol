@@ -27,7 +27,6 @@ contract Strategy {
     event Harvested(
         uint256 profit,
         uint256 loss,
-        uint256 debtPayment,
         uint256 debtOutstanding
     );
 
@@ -74,9 +73,7 @@ contract Strategy {
     }
 
     function withdraw(uint256 _amountNeeded) external returns (uint256 _loss) {
-        // console.log(address(vault));
-        // require(msg.sender == address(vault), "Strategy: !vault");
-        // Liquidate as much as possible to `want`, up to `_amountNeeded`
+        require(msg.sender == address(vault), "Strategy: !vault");
         uint256 amountFreed = want.balanceOf(address(this)); // TODO
         // (amountFreed, _loss) = liquidatePosition(_amountNeeded);
         // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
@@ -90,8 +87,7 @@ contract Strategy {
         internal
         returns (
             uint256 _profit,
-            uint256 _loss,
-            uint256 _debtPayment
+            uint256 _loss
         )
     {}
 
@@ -99,18 +95,11 @@ contract Strategy {
         uint256 profit;
         uint256 loss;
         uint256 debtOutstanding = vault.debtOutstanding(address(this));
-        uint256 debtPayment;
 
-        (profit, loss, debtPayment) = prepareReturn(debtOutstanding);
+        (profit, loss) = prepareReturn(debtOutstanding);
 
-        // Allow Vault to take up to the "harvested" balance of this contract,
-        // which is the amount it has earned since the last time it reported to
-        // the Vault.
-        debtOutstanding = vault.report(profit, loss, debtPayment);
+        debtOutstanding = vault.report(profit, loss);
 
-        // Check if free returns are left, and re-invest them
-        // adjustPosition(debtOutstanding);
-
-        emit Harvested(profit, loss, debtPayment, debtOutstanding);
+        emit Harvested(profit, loss, debtOutstanding);
     }
 }
