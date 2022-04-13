@@ -141,8 +141,8 @@ contract Vault is IVault, ERC20 {
             _spendAllowance(owner, receiver, assets);
         }
 
-        uint loss;
-        uint balance = asset.balanceOf(address(this));
+        uint256 loss;
+        uint256 balance = asset.balanceOf(address(this));
 
         if (balance < assets) {
             loss = IStrategy(strategy).withdraw(assets - balance);
@@ -166,8 +166,8 @@ contract Vault is IVault, ERC20 {
             _spendAllowance(owner, receiver, assets);
         }
 
-        uint loss;
-        uint balance = asset.balanceOf(address(this));
+        uint256 loss;
+        uint256 balance = asset.balanceOf(address(this));
 
         if (balance < assets) {
             loss = IStrategy(strategy).withdraw(assets - balance);
@@ -180,10 +180,10 @@ contract Vault is IVault, ERC20 {
         asset.safeTransfer(receiver, assets - loss);
     }
 
-    function report(
-        uint256 gain,
-        uint256 loss
-    ) external returns (uint256 debt) {
+    function report(uint256 gain, uint256 loss)
+        external
+        returns (uint256 debt)
+    {
         require(
             strategies[msg.sender].activation > 0,
             "Vault: ONLY_APPROVED_STRATEGY"

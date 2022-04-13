@@ -12,32 +12,17 @@ const main = async function () {
     // Mainnet Contract for the underlying token https://etherscan.io/address/0x6b175474e89094c44da98b954eedeac495271d0f
     const underlyingAddress = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
     const erc20AbiJson = [
-        {
-            "inputs": [
-                {
-                    "internalType": "address",
-                    "name": "",
-                    "type": "address"
-                }
-            ],
-            "name": "balanceOf",
-            "outputs": [
-                {
-                    "internalType": "uint256",
-                    "name": "",
-                    "type": "uint256"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        },
+        'function balanceOf(address) external view returns (uint)',
         'function transfer(address dst, uint wad) external returns(bool)'
     ];
     const underlying = new ethers.Contract(underlyingAddress, erc20AbiJson, owner);
 
     // Mainnet Contract for cDAI (https://compound.finance/docs#networks)
     const cTokenAddress = '0x5d3a536e4d6dbd6114cc1ead35777bab948e3643';
-    const cTokenAbi = ['function balanceOfUnderlying(address owner) external returns (uint)', 'function balanceOf(address owner) external view returns(uint)'];
+    const cTokenAbi = [
+        'function balanceOfUnderlying(address owner) external returns (uint)',
+        'function balanceOf(address owner) external view returns(uint)'
+    ];
     const cToken = new ethers.Contract(cTokenAddress, cTokenAbi, owner);
 
     const assetName = 'DAI'; // for the log output lines

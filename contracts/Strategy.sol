@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "./interfaces/IVault.sol";
+import "./interfaces/CErc20.sol";
 import "hardhat/console.sol";
 
 contract Strategy {
@@ -24,11 +25,7 @@ contract Strategy {
 
     event UpdatedKeeper(address newKeeper);
 
-    event Harvested(
-        uint256 profit,
-        uint256 loss,
-        uint256 debtOutstanding
-    );
+    event Harvested(uint256 profit, uint256 loss, uint256 debtOutstanding);
 
     modifier onlyAuthorized() {
         require(msg.sender == strategist);
@@ -60,6 +57,33 @@ contract Strategy {
         // debtThreshold = 0;
     }
 
+    function deposit(address _cErc20Contract, uint256 _numTokensToSupply)
+        external
+        returns (uint256 mintResult)
+    {
+        CErc20 cToken = CErc20(_cErc20Contract);
+
+        // // Amount of current exchange rate from cToken to underlying
+        // uint256 exchangeRateMantissa = cToken.exchangeRateCurrent();
+        // emit MyLog("Exchange Rate (scaled up): ", exchangeRateMantissa);
+
+        // // Amount added to you supply balance this block
+        // uint256 supplyRateMantissa = cToken.supplyRatePerBlock();
+        // emit MyLog("Supply Rate: (scaled up)", supplyRateMantissa);
+
+        want.approve(_cErc20Contract, _numTokensToSupply);
+
+        mintResult = cToken.mint(_numTokensToSupply);
+    }
+
+    function removeLiquidity(uint256 amount, address _cErc20Contract)
+        external
+    {
+        CErc20 cToken = CErc20(_cErc20Contract);
+
+        cToken.redeem(amount);
+    }
+
     function setStrategist(address _strategist) external onlyAuthorized {
         require(_strategist != address(0));
         strategist = _strategist;
@@ -85,10 +109,7 @@ contract Strategy {
 
     function prepareReturn(uint256 _debtOutstanding)
         internal
-        returns (
-            uint256 _profit,
-            uint256 _loss
-        )
+        returns (uint256 _profit, uint256 _loss)
     {}
 
     function harvest() external onlyKeepers {

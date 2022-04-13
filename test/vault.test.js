@@ -8,6 +8,13 @@ describe("Vault", function () {
     let maxUint = ethers.BigNumber.from(2n ** 256n - 1n);
 
     beforeEach(async function () {
+
+        await hre.network.provider.request({
+            method: 'hardhat_impersonateAccount',
+            params: ["0x7182A1B9CF88e87b83E936d3553c91f9E7BeBDD7"],
+        });
+        const signer = await ethers.getSigner("0x7182A1B9CF88e87b83E936d3553c91f9E7BeBDD7");
+        
         [acc1, acc2] = await ethers.getSigners();
         token = await (await (await ethers.getContractFactory('ERC20Token', acc1))
             .deploy("LampTokenA", "LTA", 10000))
