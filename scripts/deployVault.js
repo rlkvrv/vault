@@ -11,25 +11,7 @@ async function main() {
 
     const underlyingAddress = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
     const erc20AbiJson = [
-        {
-            "inputs": [
-                {
-                    "internalType": "address",
-                    "name": "",
-                    "type": "address"
-                }
-            ],
-            "name": "balanceOf",
-            "outputs": [
-                {
-                    "internalType": "uint256",
-                    "name": "",
-                    "type": "uint256"
-                }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-        },
+        'function balanceOf(address) external view returns (uint)',
         'function transfer(address dst, uint wad) external returns(bool)',
         'function approve(address usr, uint wad) external returns(bool)'
     ];

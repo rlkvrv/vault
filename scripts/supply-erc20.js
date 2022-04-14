@@ -68,6 +68,8 @@ const main = async function () {
     // Uncomment this to see the solidity logs
     // console.log(supplyResult.events);
 
+    await hre.network.provider.send("hardhat_mine", ["0x10000000"]);
+
     let balanceOfUnderlying = await cToken.callStatic
         .balanceOfUnderlying(myContractAddress) / Math.pow(10, underlyingDecimals);
     console.log(`${assetName} supplied to the Compound Protocol:`, balanceOfUnderlying);

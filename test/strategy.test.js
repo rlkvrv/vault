@@ -17,6 +17,8 @@ describe("Compound", function () {
     let decimals = 10n ** 18n;
     let cToken;
     let cTokenAddress;
+    let compToken;
+    let comptroller;
 
     beforeEach(async function () {
         const [owner] = await hre.ethers.getSigners();
@@ -36,6 +38,15 @@ describe("Compound", function () {
         ];
         cToken = new ethers.Contract(cTokenAddress, cTokenAbi, owner);
 
+        compToken = new ethers.Contract(
+            '0xc00e94Cb662C3520282E6f5717214004A7f26888',
+            [
+                'function balanceOf(address owner) external view returns(uint)',
+                'function getCurrentVotes(address account) returns(uint96)'
+            ],
+            owner
+        )
+
         const Vault = await ethers.getContractFactory("Vault", owner);
         vault = await (await Vault.deploy(underlying.address)).deployed();
         await underlying.connect(signer).approve(vault.address, 10000n * decimals);
@@ -50,6 +61,12 @@ describe("Compound", function () {
         await vault.connect(signer).deposit(10000n * decimals, signer.address);
 
         // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / Math.pow(10, 18));
+        // const comptrollerAbi = require('../contracts/abi/Coumptroller.json');
+        comptroller = new ethers.Contract(
+            '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B',
+            ['function claimComp(address holder) public'],
+            owner
+        )
     })
 
     it("deposit DAI to Compound", async function () {
@@ -58,16 +75,19 @@ describe("Compound", function () {
 
         await strategy.deposit(cTokenAddress, 10000n * decimals);
         expect(await underlying.balanceOf(strategy.address)).eq(0);
-    
-        console.log((await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
-        console.log((await cToken.callStatic.balanceOfUnderlying(strategy.address)) / Math.pow(10, 18));
 
-        
+        console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
+        console.log('cToken underlying bal: ', (await cToken.callStatic.balanceOfUnderlying(strategy.address)) / Math.pow(10, 18));
+
+        await hre.network.provider.send("hardhat_mine", ["0x1000000"]);
 
         await strategy.removeLiquidity(await cToken.balanceOf(strategy.address), cTokenAddress);
 
-        console.log((await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
-        console.log((await underlying.balanceOf(strategy.address)) / Math.pow(10, 18));
+        console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
+        console.log('underlying bal: ', (await underlying.balanceOf(strategy.address)) / Math.pow(10, 18));
+
+        await comptroller.claimComp(strategy.address);
+        console.log('COMP bal: ', (await compToken.balanceOf(strategy.address)) / Math.pow(10, 18));
     });
 
 });
