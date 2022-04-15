@@ -2,7 +2,9 @@
 
 pragma solidity 0.8.10;
 
-interface CErc20 {
+interface ICErc20 {
+    function balanceOf(address owner) external view returns (uint256);
+
     function mint(uint256) external returns (uint256);
 
     function exchangeRateCurrent() external returns (uint256);
