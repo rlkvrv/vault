@@ -6,19 +6,32 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import "./interfaces/IVault.sol";
-import "./interfaces/CErc20.sol";
+import "./interfaces/ICErc20.sol";
+import "./interfaces/IComptroller.sol";
+import "./interfaces/ICompToken.sol";
+import "./interfaces/IUniswapRouter.sol";
+
 import "hardhat/console.sol";
 
 contract Strategy {
     using SafeERC20 for ERC20;
 
+    IComptroller compotroller =
+        IComptroller(0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B);
+    ICompToken compToken =
+        ICompToken(0xc00e94Cb662C3520282E6f5717214004A7f26888);
+    IUniswapRouter uniswapRouter =
+        IUniswapRouter(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+
     IVault public vault;
     IERC20 public want;
+    ICErc20 public cToken;
     address public strategist;
     address public keeper;
+    uint256 public totalCompoundDebt; // Total outstanding debt that Compound has
 
-    constructor(address _vault) {
-        _initialize(_vault, msg.sender, msg.sender);
+    constructor(address _vault, address _cErc20Contract) {
+        _initialize(_vault, msg.sender, msg.sender, _cErc20Contract);
     }
 
     event UpdatedStrategist(address newStrategist);
@@ -40,12 +53,15 @@ contract Strategy {
     function _initialize(
         address _vault,
         address _strategist,
-        address _keeper
+        address _keeper,
+        address _cErc20Contract
     ) internal {
         require(address(want) == address(0), "Strategy already initialized");
 
         vault = IVault(_vault);
         want = ERC20(vault.token());
+        cToken = ICErc20(_cErc20Contract);
+
         SafeERC20.safeApprove(want, _vault, type(uint256).max);
         strategist = _strategist;
         keeper = _keeper;
@@ -57,31 +73,59 @@ contract Strategy {
         // debtThreshold = 0;
     }
 
-    function deposit(address _cErc20Contract, uint256 _numTokensToSupply)
-        external
-        returns (uint256 mintResult)
-    {
-        CErc20 cToken = CErc20(_cErc20Contract);
-
-        // // Amount of current exchange rate from cToken to underlying
-        // uint256 exchangeRateMantissa = cToken.exchangeRateCurrent();
-        // emit MyLog("Exchange Rate (scaled up): ", exchangeRateMantissa);
-
-        // // Amount added to you supply balance this block
-        // uint256 supplyRateMantissa = cToken.supplyRatePerBlock();
-        // emit MyLog("Supply Rate: (scaled up)", supplyRateMantissa);
-
-        want.approve(_cErc20Contract, _numTokensToSupply);
-
-        mintResult = cToken.mint(_numTokensToSupply);
+    function getRewards() external returns (uint256 rewards) {
+        compotroller.claimComp(address(this));
+        rewards = compToken.balanceOf(address(this));
+        console.log("rewards: ", rewards);
     }
 
-    function removeLiquidity(uint256 amount, address _cErc20Contract)
-        external
-    {
-        CErc20 cToken = CErc20(_cErc20Contract);
+    function swapRewardsToWantToken() external {
+        uint256 amountIn = compToken.balanceOf(address(this));
+        compToken.approve(address(uniswapRouter), amountIn);
 
-        cToken.redeem(amount);
+        address[] memory path = new address[](2);
+        path[0] = address(compToken);
+        path[1] = address(want);
+        uint256 amountOutMin = uniswapRouter.getAmountsOut(amountIn, path)[1];
+
+        uniswapRouter.swapExactTokensForTokens(
+            amountIn,
+            amountOutMin,
+            path,
+            address(this),
+            block.timestamp // сколько поставить?
+        );
+
+        // нужно ли добавлять событие Swap?
+    }
+
+    function adjustPosition() external returns (uint256 mintResult) {
+        uint256 currentBalance = want.balanceOf(address(this));
+        want.approve(address(cToken), currentBalance);
+
+        totalCompoundDebt += currentBalance;
+        cToken.mint(currentBalance);
+        mintResult = cToken.balanceOfUnderlying(address(this));
+    }
+
+    function liquidatePosition(uint256 amount) external {
+        require(
+            cToken.balanceOfUnderlying(address(this)) >= amount,
+            "Strategy: insufficienty balance"
+        );
+
+        if (totalCompoundDebt < amount) {
+            totalCompoundDebt -= totalCompoundDebt;
+        } else {
+            totalCompoundDebt -= amount;
+        }
+
+        cToken.redeemUnderlying(amount);
+    }
+
+    function liquidateAllPositions() internal {
+        cToken.redeem(cToken.balanceOf(address(this)));
+        totalCompoundDebt = cToken.balanceOfUnderlying(address(this));
     }
 
     function setStrategist(address _strategist) external onlyAuthorized {
@@ -110,7 +154,16 @@ contract Strategy {
     function prepareReturn(uint256 _debtOutstanding)
         internal
         returns (uint256 _profit, uint256 _loss)
-    {}
+    {
+        // console.log('prepare: ', cToken.balanceOfUnderlying(address(this)));
+        // uint256 underlyingBal = cToken.balanceOfUnderlying(address(this));
+
+        // if (underlyingBal > _debtOutstanding) {
+        //     _profit = underlyingBal - _debtOutstanding;
+        // } else if (_debtOutstanding > underlyingBal){
+        //     _loss = _debtOutstanding - underlyingBal;
+        // }
+    }
 
     function harvest() external onlyKeepers {
         uint256 profit;

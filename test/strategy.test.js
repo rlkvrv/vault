@@ -19,6 +19,7 @@ describe("Compound", function () {
     let cTokenAddress;
     let compToken;
     let comptroller;
+    let uniswap;
 
     beforeEach(async function () {
         const [owner] = await hre.ethers.getSigners();
@@ -42,7 +43,8 @@ describe("Compound", function () {
             '0xc00e94Cb662C3520282E6f5717214004A7f26888',
             [
                 'function balanceOf(address owner) external view returns(uint)',
-                'function getCurrentVotes(address account) returns(uint96)'
+                'function getCurrentVotes(address account) returns(uint96)',
+                'function approve(address spender, uint rawAmount) external returns (bool)'
             ],
             owner
         )
@@ -52,7 +54,7 @@ describe("Compound", function () {
         await underlying.connect(signer).approve(vault.address, 10000n * decimals);
 
         const Strategy = await ethers.getContractFactory("Strategy", owner);
-        strategy = await (await Strategy.deploy(vault.address)).deployed();
+        strategy = await (await Strategy.deploy(vault.address, cToken.address)).deployed();
 
         await vault.addStrategy(strategy.address, 0);
 
@@ -67,27 +69,42 @@ describe("Compound", function () {
             ['function claimComp(address holder) public'],
             owner
         )
+
+        uniswap = new ethers.Contract(
+            '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+            [
+                'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns(uint[] memory amounts)',
+                'function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'
+            ],
+            owner
+        )
     })
 
-    it("deposit DAI to Compound", async function () {
+    it("addLiquidity DAI to Compound", async function () {
         await strategy.harvest();
         expect((await underlying.balanceOf(strategy.address)) / Math.pow(10, 18)).eq(10000);
 
-        await strategy.deposit(cTokenAddress, 10000n * decimals);
+        await strategy.adjustPosition();
         expect(await underlying.balanceOf(strategy.address)).eq(0);
-
+        
         console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
         console.log('cToken underlying bal: ', (await cToken.callStatic.balanceOfUnderlying(strategy.address)) / Math.pow(10, 18));
-
+        
         await hre.network.provider.send("hardhat_mine", ["0x1000000"]);
-
-        await strategy.removeLiquidity(await cToken.balanceOf(strategy.address), cTokenAddress);
+        
+        await strategy.liquidatePosition(await cToken.callStatic.balanceOfUnderlying(strategy.address));
 
         console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
         console.log('underlying bal: ', (await underlying.balanceOf(strategy.address)) / Math.pow(10, 18));
 
-        await comptroller.claimComp(strategy.address);
-        console.log('COMP bal: ', (await compToken.balanceOf(strategy.address)) / Math.pow(10, 18));
+        await strategy.getRewards();
+        await strategy.swapRewardsToWantToken();
+        await strategy.adjustPosition();
+
+        console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
+
+        console.log('underlying bal: ', (await underlying.balanceOf(strategy.address)) / Math.pow(10, 18));
+
     });
 
 });
