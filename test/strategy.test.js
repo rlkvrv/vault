@@ -22,9 +22,10 @@ describe("Compound", function () {
     let comptroller;
     let uniswap;
     let signer;
+    let owner;
 
     beforeEach(async function () {
-        const [owner] = await hre.ethers.getSigners();
+        [owner] = await hre.ethers.getSigners();
 
         await hre.network.provider.request({
             method: 'hardhat_impersonateAccount',
@@ -58,13 +59,10 @@ describe("Compound", function () {
         const Strategy = await ethers.getContractFactory("Strategy", owner);
         strategy = await (await Strategy.deploy(vault.address, cToken.address)).deployed();
 
-        await vault.addStrategy(strategy.address, 0);
+        await vault.addStrategy(strategy.address, 2, 2);
 
-        // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / decimals);
         await vault.connect(signer).deposit(10000n * decimalsBigInt, signer.address);
 
-        // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / decimals);
-        // const comptrollerAbi = require('../contracts/abi/Coumptroller.json');
         comptroller = new ethers.Contract(
             '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B',
             ['function claimComp(address holder) public'],
@@ -126,12 +124,13 @@ describe("Compound", function () {
         await vault.connect(signer).redeem(1000n * decimalsBigInt, signer.address, signer.address);
     });
 
-    it("unnamed", async function () {
+    it("should be written off perfomance fee", async function () {
         await strategy.harvest();
         await strategy.adjustPosition();
 
         await hre.network.provider.send("hardhat_mine", ["0x1000000"]);
 
         await strategy.harvest();
+        expect(Math.round(await vault.balanceOf(owner.address) / decimals)).eq(32);
     });
 });

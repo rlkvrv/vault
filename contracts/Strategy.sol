@@ -81,10 +81,9 @@ contract Strategy {
     function getRewards() external returns (uint256 rewards) {
         compotroller.claimComp(strategyAddr);
         rewards = compToken.balanceOf(strategyAddr);
-        adjustPosition();
     }
 
-    function swapRewardsToWantToken() external {
+    function swapRewardsToWantToken() public returns (uint profit){
         uint256 amountIn = compToken.balanceOf(strategyAddr);
         compToken.approve(address(uniswapRouter), amountIn);
 
@@ -92,6 +91,8 @@ contract Strategy {
         path[0] = address(compToken);
         path[1] = address(want);
         uint256 amountOutMin = uniswapRouter.getAmountsOut(amountIn, path)[1];
+
+        uint256 balanceBefore = want.balanceOf(strategyAddr);
 
         uniswapRouter.swapExactTokensForTokens(
             amountIn,
@@ -101,6 +102,9 @@ contract Strategy {
             block.timestamp // сколько поставить?
         );
 
+        uint256 balanceAfter = want.balanceOf(strategyAddr);
+        profit = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0;
+        vault.report(profit, 0);
         // нужно ли добавлять событие Swap?
     }
 
@@ -132,10 +136,9 @@ contract Strategy {
         }
     }
 
-    function liquidateAllPositions() internal {
+    function liquidateAllPositions() external {
         cToken.redeem(cToken.balanceOf(strategyAddr));
         totalCompoundDebt = cToken.balanceOfUnderlying(strategyAddr);
-        want.safeTransfer(vaultAddr, want.balanceOf(strategyAddr));
     }
 
     function setStrategist(address _strategist) external onlyAuthorized {

@@ -20,7 +20,7 @@ describe("Vault", function () {
         const Strategy = await ethers.getContractFactory("Strategy", acc1);
         strategy = await (await Strategy.deploy(vault.address, acc3.address)).deployed();
 
-        await vault.addStrategy(strategy.address, 0);
+        await vault.addStrategy(strategy.address, 2, 2);
     })
 
     // it("TEEEEEEEEEEEST", async function () {
