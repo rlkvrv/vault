@@ -5,9 +5,10 @@ pragma solidity 0.8.10;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import "hardhat/console.sol";
 import "./interfaces/IVault.sol";
 import "./interfaces/IStrategy.sol";
+
+import "hardhat/console.sol";
 
 contract Vault is IVault, ERC20 {
     using SafeERC20 for ERC20;
@@ -145,7 +146,9 @@ contract Vault is IVault, ERC20 {
         uint256 balance = asset.balanceOf(address(this));
 
         if (balance < assets) {
-            loss = IStrategy(strategy).withdraw(assets - balance);
+            uint strategyDebt = assets - balance;
+            loss = IStrategy(strategy).withdraw(strategyDebt);
+            strategies[strategy].totalDebt -= strategyDebt;
         }
 
         _burn(owner, shares);
@@ -170,7 +173,9 @@ contract Vault is IVault, ERC20 {
         uint256 balance = asset.balanceOf(address(this));
 
         if (balance < assets) {
-            loss = IStrategy(strategy).withdraw(assets - balance);
+            uint strategyDebt = assets - balance;
+            loss = IStrategy(strategy).withdraw(strategyDebt);
+            strategies[strategy].totalDebt -= strategyDebt;
         }
 
         _burn(owner, shares);

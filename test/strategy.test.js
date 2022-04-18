@@ -14,12 +14,14 @@ describe("Compound", function () {
     let underlying;
     let vault;
     let strategy;
-    let decimals = 10n ** 18n;
+    let decimals = Math.pow(10, 18);
+    let decimalsBigInt = 10n ** 18n;
     let cToken;
     let cTokenAddress;
     let compToken;
     let comptroller;
     let uniswap;
+    let signer;
 
     beforeEach(async function () {
         const [owner] = await hre.ethers.getSigners();
@@ -28,7 +30,7 @@ describe("Compound", function () {
             method: 'hardhat_impersonateAccount',
             params: [richUserAddr],
         });
-        const signer = await ethers.getSigner(richUserAddr);
+        signer = await ethers.getSigner(richUserAddr);
 
         underlying = new ethers.Contract(underlyingAddress, erc20AbiJson, owner);
 
@@ -51,18 +53,17 @@ describe("Compound", function () {
 
         const Vault = await ethers.getContractFactory("Vault", owner);
         vault = await (await Vault.deploy(underlying.address)).deployed();
-        await underlying.connect(signer).approve(vault.address, 10000n * decimals);
+        await underlying.connect(signer).approve(vault.address, 10000n * decimalsBigInt);
 
         const Strategy = await ethers.getContractFactory("Strategy", owner);
         strategy = await (await Strategy.deploy(vault.address, cToken.address)).deployed();
 
         await vault.addStrategy(strategy.address, 0);
 
-        // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / Math.pow(10, 18));
+        // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / decimals);
+        await vault.connect(signer).deposit(10000n * decimalsBigInt, signer.address);
 
-        await vault.connect(signer).deposit(10000n * decimals, signer.address);
-
-        // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / Math.pow(10, 18));
+        // console.log('signer balance: ', (await underlying.balanceOf(signer.address)) / decimals);
         // const comptrollerAbi = require('../contracts/abi/Coumptroller.json');
         comptroller = new ethers.Contract(
             '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B',
@@ -80,31 +81,57 @@ describe("Compound", function () {
         )
     })
 
-    it("addLiquidity DAI to Compound", async function () {
+    it("added liquidity in DAI to Compound protocol", async function () {
         await strategy.harvest();
-        expect((await underlying.balanceOf(strategy.address)) / Math.pow(10, 18)).eq(10000);
-
+        expect((await underlying.balanceOf(strategy.address)) / decimals).eq(10000);
         await strategy.adjustPosition();
         expect(await underlying.balanceOf(strategy.address)).eq(0);
-        
-        console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
-        console.log('cToken underlying bal: ', (await cToken.callStatic.balanceOfUnderlying(strategy.address)) / Math.pow(10, 18));
-        
-        await hre.network.provider.send("hardhat_mine", ["0x1000000"]);
-        
-        await strategy.liquidatePosition(await cToken.callStatic.balanceOfUnderlying(strategy.address));
+        expect(Math.round(await cToken.balanceOf(strategy.address) / Math.pow(10, 8))).eq(455503);
+        expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(10000);
+    });
 
-        console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
-        console.log('underlying bal: ', (await underlying.balanceOf(strategy.address)) / Math.pow(10, 18));
+    it("removed liquidity in DAI to Compound protocol", async function () {
+        await strategy.harvest();
+        await strategy.adjustPosition();
+
+        await strategy.liquidatePosition(await cToken.callStatic.balanceOfUnderlying(strategy.address));
+        expect(Math.round(await underlying.balanceOf(strategy.address) / decimals)).eq(10000);
+    });
+
+    it("get rewards", async function () {
+        await strategy.harvest();
+        await strategy.adjustPosition();
+        await strategy.getRewards();
+
+        expect(await compToken.balanceOf(strategy.address)).eq(205215929868);
+    });
+
+    it("swap rewards to want token", async function () {
+        await strategy.harvest();
+        await strategy.adjustPosition();
+
+        await hre.network.provider.send("hardhat_mine", ["0x100000"]);
 
         await strategy.getRewards();
         await strategy.swapRewardsToWantToken();
-        await strategy.adjustPosition();
 
-        console.log('cToken bal: ', (await cToken.balanceOf(strategy.address)) / Math.pow(10, 8));
-
-        console.log('underlying bal: ', (await underlying.balanceOf(strategy.address)) / Math.pow(10, 18));
-
+        expect(Math.round(await underlying.balanceOf(strategy.address) / decimals)).eq(27);
     });
 
+    it("withdraw and redeem should be worked", async function () {
+        await strategy.harvest();
+        await strategy.adjustPosition();
+
+        await vault.connect(signer).withdraw(1000n * decimalsBigInt, signer.address, signer.address);
+        await vault.connect(signer).redeem(1000n * decimalsBigInt, signer.address, signer.address);
+    });
+
+    it("unnamed", async function () {
+        await strategy.harvest();
+        await strategy.adjustPosition();
+
+        await hre.network.provider.send("hardhat_mine", ["0x1000000"]);
+
+        await strategy.harvest();
+    });
 });

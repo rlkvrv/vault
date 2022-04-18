@@ -24,10 +24,12 @@ contract Strategy {
         IUniswapRouter(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
 
     IVault public vault;
-    IERC20 public want;
+    ERC20 public want;
     ICErc20 public cToken;
     address public strategist;
     address public keeper;
+    address public vaultAddr;
+    address public strategyAddr;
     uint256 public totalCompoundDebt; // Total outstanding debt that Compound has
 
     constructor(address _vault, address _cErc20Contract) {
@@ -59,12 +61,15 @@ contract Strategy {
         require(address(want) == address(0), "Strategy already initialized");
 
         vault = IVault(_vault);
+        vaultAddr = _vault;
         want = ERC20(vault.token());
         cToken = ICErc20(_cErc20Contract);
 
         SafeERC20.safeApprove(want, _vault, type(uint256).max);
         strategist = _strategist;
         keeper = _keeper;
+
+        strategyAddr = address(this);
 
         // initialize variables
         // minReportDelay = 0;
@@ -74,13 +79,13 @@ contract Strategy {
     }
 
     function getRewards() external returns (uint256 rewards) {
-        compotroller.claimComp(address(this));
-        rewards = compToken.balanceOf(address(this));
-        console.log("rewards: ", rewards);
+        compotroller.claimComp(strategyAddr);
+        rewards = compToken.balanceOf(strategyAddr);
+        adjustPosition();
     }
 
     function swapRewardsToWantToken() external {
-        uint256 amountIn = compToken.balanceOf(address(this));
+        uint256 amountIn = compToken.balanceOf(strategyAddr);
         compToken.approve(address(uniswapRouter), amountIn);
 
         address[] memory path = new address[](2);
@@ -92,40 +97,45 @@ contract Strategy {
             amountIn,
             amountOutMin,
             path,
-            address(this),
+            strategyAddr,
             block.timestamp // сколько поставить?
         );
 
         // нужно ли добавлять событие Swap?
     }
 
-    function adjustPosition() external returns (uint256 mintResult) {
-        uint256 currentBalance = want.balanceOf(address(this));
+    function adjustPosition() public returns (uint256 mintResult) {
+        uint256 currentBalance = want.balanceOf(strategyAddr);
         want.approve(address(cToken), currentBalance);
 
         totalCompoundDebt += currentBalance;
         cToken.mint(currentBalance);
-        mintResult = cToken.balanceOfUnderlying(address(this));
+        mintResult = cToken.balanceOfUnderlying(strategyAddr);
     }
 
-    function liquidatePosition(uint256 amount) external {
+    function liquidatePosition(uint256 amount) public {
         require(
-            cToken.balanceOfUnderlying(address(this)) >= amount,
+            cToken.balanceOfUnderlying(strategyAddr) >= amount,
             "Strategy: insufficienty balance"
         );
 
         if (totalCompoundDebt < amount) {
-            totalCompoundDebt -= totalCompoundDebt;
+            totalCompoundDebt = 0;
         } else {
             totalCompoundDebt -= amount;
         }
 
         cToken.redeemUnderlying(amount);
+
+        if (msg.sender == vaultAddr) {
+            want.safeTransfer(vaultAddr, amount);
+        }
     }
 
     function liquidateAllPositions() internal {
-        cToken.redeem(cToken.balanceOf(address(this)));
-        totalCompoundDebt = cToken.balanceOfUnderlying(address(this));
+        cToken.redeem(cToken.balanceOf(strategyAddr));
+        totalCompoundDebt = cToken.balanceOfUnderlying(strategyAddr);
+        want.safeTransfer(vaultAddr, want.balanceOf(strategyAddr));
     }
 
     function setStrategist(address _strategist) external onlyAuthorized {
@@ -141,12 +151,14 @@ contract Strategy {
     }
 
     function withdraw(uint256 _amountNeeded) external returns (uint256 _loss) {
-        require(msg.sender == address(vault), "Strategy: !vault");
-        uint256 amountFreed = want.balanceOf(address(this)); // TODO
+        require(msg.sender == vaultAddr, "Strategy: !vault");
+        uint256 amountFreed = want.balanceOf(strategyAddr); // TODO
         // (amountFreed, _loss) = liquidatePosition(_amountNeeded);
         // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
         if (amountFreed >= _amountNeeded) {
             SafeERC20.safeTransfer(want, msg.sender, _amountNeeded);
+        } else {
+            liquidatePosition(_amountNeeded - amountFreed);
         }
         // NOTE: Reinvest anything leftover on next `tend`/`harvest`
     }
@@ -155,20 +167,19 @@ contract Strategy {
         internal
         returns (uint256 _profit, uint256 _loss)
     {
-        // console.log('prepare: ', cToken.balanceOfUnderlying(address(this)));
-        // uint256 underlyingBal = cToken.balanceOfUnderlying(address(this));
+        uint256 underlyingBal = cToken.balanceOfUnderlying(strategyAddr);
 
-        // if (underlyingBal > _debtOutstanding) {
-        //     _profit = underlyingBal - _debtOutstanding;
-        // } else if (_debtOutstanding > underlyingBal){
-        //     _loss = _debtOutstanding - underlyingBal;
-        // }
+        if (underlyingBal > _debtOutstanding) {
+            _profit = underlyingBal - _debtOutstanding;
+        } else if (_debtOutstanding > underlyingBal) {
+            _loss = _debtOutstanding - underlyingBal;
+        }
     }
 
     function harvest() external onlyKeepers {
         uint256 profit;
         uint256 loss;
-        uint256 debtOutstanding = vault.debtOutstanding(address(this));
+        uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
 
         (profit, loss) = prepareReturn(debtOutstanding);
 
