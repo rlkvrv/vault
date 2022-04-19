@@ -47,7 +47,9 @@ contract Vault is IVault, ERC20 {
         address indexed receiver,
         address indexed owner,
         uint256 assets,
-        uint256 shares
+        uint256 shares,
+        uint256 currentProfit,
+        uint256 currentLoss
     );
 
     event StrategyAdded(
@@ -149,21 +151,34 @@ contract Vault is IVault, ERC20 {
             _spendAllowance(owner, receiver, assets);
         }
 
-        uint256 loss;
+        uint256 userProfit;
+        uint256 userLoss;
         uint256 balance = asset.balanceOf(address(this));
 
         if (balance < assets) {
+            uint256 userAssets;
             uint256 strategyDebt = assets - balance;
-            loss = IStrategy(strategy).withdraw(strategyDebt);
-            strategies[strategy].totalDebt -= strategyDebt;
-            totalDebt -= strategyDebt;
+
+            (userAssets, userProfit, userLoss) = IStrategy(strategy).withdraw(
+                strategyDebt
+            );
+            strategies[strategy].totalDebt -= userAssets;
+            totalDebt -= userAssets;
         }
 
         _burn(owner, shares);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        emit Withdraw(
+            msg.sender,
+            receiver,
+            owner,
+            assets,
+            shares,
+            userProfit,
+            userLoss
+        );
 
-        asset.safeTransfer(receiver, assets - loss);
+        asset.safeTransfer(receiver, assets + userProfit - userLoss);
     }
 
     function redeem(
@@ -177,21 +192,34 @@ contract Vault is IVault, ERC20 {
             _spendAllowance(owner, receiver, assets);
         }
 
-        uint256 loss;
+        uint256 userProfit;
+        uint256 userLoss;
         uint256 balance = asset.balanceOf(address(this));
 
         if (balance < assets) {
+            uint256 userAssets;
             uint256 strategyDebt = assets - balance;
-            loss = IStrategy(strategy).withdraw(strategyDebt);
-            strategies[strategy].totalDebt -= strategyDebt;
-            totalDebt -= strategyDebt;
+
+            (userAssets, userProfit, userLoss) = IStrategy(strategy).withdraw(
+                strategyDebt
+            );
+            strategies[strategy].totalDebt -= userAssets;
+            totalDebt -= userAssets;
         }
 
         _burn(owner, shares);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, shares);
+        emit Withdraw(
+            msg.sender,
+            receiver,
+            owner,
+            assets,
+            shares,
+            userProfit,
+            userLoss
+        );
 
-        asset.safeTransfer(receiver, assets - loss);
+        asset.safeTransfer(receiver, assets + userProfit - userLoss);
     }
 
     function report(uint256 gain, uint256 loss)
@@ -219,11 +247,13 @@ contract Vault is IVault, ERC20 {
 
         if (loss > 0) {
             strategies[msg.sender].totalLoss += loss;
-            strategies[msg.sender].totalDebt -= gain;
+            strategies[msg.sender].totalDebt -= loss;
             totalDebt -= loss;
         }
 
         debt = debtOutstanding(msg.sender);
+
+        strategies[msg.sender].lastReport = block.timestamp;
 
         emit StrategyReported(
             msg.sender,
@@ -305,10 +335,14 @@ contract Vault is IVault, ERC20 {
     }
 
     function _assessFees(address _strategy, uint256 gain) private {
+        uint256 duration = block.timestamp - strategies[_strategy].lastReport;
+        assert(duration != 0);
+
         uint256 _decimals = 10**strategies[_strategy].feeDecimals;
         uint256 _perfomanceFee = strategies[_strategy].performanceFee;
         uint256 gainWithFee = (gain * (_decimals - _perfomanceFee)) / _decimals;
         uint256 fee = gain - gainWithFee;
+
         _mint(management, convertToShares(fee));
     }
 }

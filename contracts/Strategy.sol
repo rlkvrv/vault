@@ -30,7 +30,7 @@ contract Strategy {
     address public keeper;
     address public vaultAddr;
     address public strategyAddr;
-    uint256 public totalCompoundDebt; // Total outstanding debt that Compound has
+    uint256 public totalProtocolDebt; // Total outstanding debt that Protocol has
 
     constructor(address _vault, address _cErc20Contract) {
         _initialize(_vault, msg.sender, msg.sender, _cErc20Contract);
@@ -78,12 +78,24 @@ contract Strategy {
         // debtThreshold = 0;
     }
 
+    function setStrategist(address _strategist) external onlyAuthorized {
+        require(_strategist != address(0));
+        strategist = _strategist;
+        emit UpdatedStrategist(_strategist);
+    }
+
+    function setKeeper(address _keeper) external onlyAuthorized {
+        require(_keeper != address(0));
+        keeper = _keeper;
+        emit UpdatedKeeper(_keeper);
+    }
+
     function getRewards() external returns (uint256 rewards) {
         compotroller.claimComp(strategyAddr);
         rewards = compToken.balanceOf(strategyAddr);
     }
 
-    function swapRewardsToWantToken() public returns (uint profit){
+    function swapRewardsToWantToken() public returns (uint256 profit) {
         uint256 amountIn = compToken.balanceOf(strategyAddr);
         compToken.approve(address(uniswapRouter), amountIn);
 
@@ -103,7 +115,9 @@ contract Strategy {
         );
 
         uint256 balanceAfter = want.balanceOf(strategyAddr);
-        profit = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0;
+        profit = balanceAfter > balanceBefore
+            ? balanceAfter - balanceBefore
+            : 0;
         vault.report(profit, 0);
         // нужно ли добавлять событие Swap?
     }
@@ -112,7 +126,7 @@ contract Strategy {
         uint256 currentBalance = want.balanceOf(strategyAddr);
         want.approve(address(cToken), currentBalance);
 
-        totalCompoundDebt += currentBalance;
+        totalProtocolDebt += currentBalance;
         cToken.mint(currentBalance);
         mintResult = cToken.balanceOfUnderlying(strategyAddr);
     }
@@ -123,47 +137,50 @@ contract Strategy {
             "Strategy: insufficienty balance"
         );
 
-        if (totalCompoundDebt < amount) {
-            totalCompoundDebt = 0;
+        if (totalProtocolDebt < amount) {
+            totalProtocolDebt = 0;
         } else {
-            totalCompoundDebt -= amount;
+            totalProtocolDebt -= amount;
         }
 
         cToken.redeemUnderlying(amount);
-
-        if (msg.sender == vaultAddr) {
-            want.safeTransfer(vaultAddr, amount);
-        }
     }
 
     function liquidateAllPositions() external {
         cToken.redeem(cToken.balanceOf(strategyAddr));
-        totalCompoundDebt = cToken.balanceOfUnderlying(strategyAddr);
+        totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
     }
 
-    function setStrategist(address _strategist) external onlyAuthorized {
-        require(_strategist != address(0));
-        strategist = _strategist;
-        emit UpdatedStrategist(_strategist);
-    }
-
-    function setKeeper(address _keeper) external onlyAuthorized {
-        require(_keeper != address(0));
-        keeper = _keeper;
-        emit UpdatedKeeper(_keeper);
-    }
-
-    function withdraw(uint256 _amountNeeded) external returns (uint256 _loss) {
+    function withdraw(uint256 _amount)
+        external
+        returns (
+            uint256 _userAssets,
+            uint256 _userProfit,
+            uint256 _userLoss
+        )
+    {
         require(msg.sender == vaultAddr, "Strategy: !vault");
-        uint256 amountFreed = want.balanceOf(strategyAddr); // TODO
-        // (amountFreed, _loss) = liquidatePosition(_amountNeeded);
-        // Send it directly back (NOTE: Using `msg.sender` saves some gas here)
-        if (amountFreed >= _amountNeeded) {
-            SafeERC20.safeTransfer(want, msg.sender, _amountNeeded);
+        uint256 amountFreed = want.balanceOf(strategyAddr);
+
+        if (amountFreed >= _amount) {
+            want.safeTransfer(msg.sender, _amount);
         } else {
-            liquidatePosition(_amountNeeded - amountFreed);
+            uint256 _protocolDebt = _amount - amountFreed;
+            uint256 profit;
+            uint256 loss;
+            (profit, loss) = prepareReturn(totalProtocolDebt);
+            _userProfit = (_protocolDebt * profit) / totalProtocolDebt;
+            _userLoss = (_protocolDebt * loss) / totalProtocolDebt;
+
+            uint256 _amountRequired = _userLoss > 0
+                ? _protocolDebt - _userLoss
+                : _protocolDebt + _userProfit;
+
+            liquidatePosition(_amountRequired);
+
+            _userAssets = _amount + _userProfit - _userLoss;
+            want.safeTransfer(vaultAddr, _userAssets);
         }
-        // NOTE: Reinvest anything leftover on next `tend`/`harvest`
     }
 
     function prepareReturn(uint256 _debtOutstanding)

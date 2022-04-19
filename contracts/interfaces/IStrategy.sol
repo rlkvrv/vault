@@ -3,5 +3,11 @@
 pragma solidity 0.8.10;
 
 interface IStrategy {
-    function withdraw(uint256 _amountNeeded) external returns (uint256 _loss);
+    function withdraw(uint256 _amountNeeded)
+        external
+        returns (
+            uint256 _userAssets,
+            uint256 _userProfit,
+            uint256 _userLoss
+        );
 }
