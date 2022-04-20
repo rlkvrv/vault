@@ -20,20 +20,8 @@ describe("Vault", function () {
         const Strategy = await ethers.getContractFactory("Strategy", acc1);
         strategy = await (await Strategy.deploy(vault.address, acc3.address)).deployed();
 
-        await vault.addStrategy(strategy.address, 2, 2);
+        await vault.addStrategy(strategy.address, 100);
     })
-
-    // it("TEEEEEEEEEEEST", async function () {
-    //     await vault.deposit(1000, acc1.address);
-    //     await strategy.harvest();
-    //     await vault.deposit(2000, acc1.address);
-    //     await strategy.harvest();
-    //     console.log(await token.balanceOf(acc1.address));
-    //     await vault.withdraw(1000, acc1.address, acc1.address);
-    //     console.log(await token.balanceOf(strategy.address));
-    //     console.log(await token.balanceOf(acc1.address));
-    //     console.log(await token.balanceOf(vault.address));
-    // });
 
     it("maxDeposit should be return maxUint", async function () {
         expect(await vault.maxDeposit(acc1.address)).eq(maxUint);

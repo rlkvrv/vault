@@ -40,7 +40,12 @@ contract Strategy {
 
     event UpdatedKeeper(address newKeeper);
 
-    event Harvested(uint256 profit, uint256 loss, uint256 debtOutstanding);
+    event Harvested(
+        uint256 profit,
+        uint256 rewardsProfit,
+        uint256 loss,
+        uint256 debtOutstanding
+    );
 
     modifier onlyAuthorized() {
         require(msg.sender == strategist);
@@ -70,12 +75,6 @@ contract Strategy {
         keeper = _keeper;
 
         strategyAddr = address(this);
-
-        // initialize variables
-        // minReportDelay = 0;
-        // maxReportDelay = 86400;
-        // profitFactor = 100;
-        // debtThreshold = 0;
     }
 
     function setStrategist(address _strategist) external onlyAuthorized {
@@ -90,65 +89,12 @@ contract Strategy {
         emit UpdatedKeeper(_keeper);
     }
 
-    function getRewards() external returns (uint256 rewards) {
-        compotroller.claimComp(strategyAddr);
-        rewards = compToken.balanceOf(strategyAddr);
-    }
-
-    function swapRewardsToWantToken() public returns (uint256 profit) {
-        uint256 amountIn = compToken.balanceOf(strategyAddr);
-        compToken.approve(address(uniswapRouter), amountIn);
-
-        address[] memory path = new address[](2);
-        path[0] = address(compToken);
-        path[1] = address(want);
-        uint256 amountOutMin = uniswapRouter.getAmountsOut(amountIn, path)[1];
-
-        uint256 balanceBefore = want.balanceOf(strategyAddr);
-
-        uniswapRouter.swapExactTokensForTokens(
-            amountIn,
-            amountOutMin,
-            path,
-            strategyAddr,
-            block.timestamp // сколько поставить?
-        );
-
-        uint256 balanceAfter = want.balanceOf(strategyAddr);
-        profit = balanceAfter > balanceBefore
-            ? balanceAfter - balanceBefore
-            : 0;
-        vault.report(profit, 0);
-        // нужно ли добавлять событие Swap?
-    }
-
-    function adjustPosition() public returns (uint256 mintResult) {
-        uint256 currentBalance = want.balanceOf(strategyAddr);
-        want.approve(address(cToken), currentBalance);
-
-        totalProtocolDebt += currentBalance;
-        cToken.mint(currentBalance);
-        mintResult = cToken.balanceOfUnderlying(strategyAddr);
-    }
-
-    function liquidatePosition(uint256 amount) public {
-        require(
-            cToken.balanceOfUnderlying(strategyAddr) >= amount,
-            "Strategy: insufficienty balance"
-        );
-
-        if (totalProtocolDebt < amount) {
-            totalProtocolDebt = 0;
-        } else {
-            totalProtocolDebt -= amount;
-        }
-
-        cToken.redeemUnderlying(amount);
-    }
-
-    function liquidateAllPositions() external {
+    function liquidateAllPositions() external onlyAuthorized {
         cToken.redeem(cToken.balanceOf(strategyAddr));
         totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
+
+        uint256 compTokenAmount = _claimRewards();
+        _swapRewardsToWantToken(compTokenAmount);
     }
 
     function withdraw(uint256 _amount)
@@ -166,7 +112,7 @@ contract Strategy {
             // если на стратегии достаточно want токена, переводим
             want.safeTransfer(msg.sender, _amount);
         } else {
-            // иначе запрашиваем у протокола недоастающие средства, 
+            // иначе запрашиваем у протокола недоастающие средства,
             uint256 _protocolDebt = _amount - amountFreed;
             uint256 profit;
             uint256 loss;
@@ -188,6 +134,50 @@ contract Strategy {
         }
     }
 
+    function harvest() external onlyKeepers {
+        uint256 profit;
+        uint256 loss;
+        uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
+        uint256 compTokenAmount = _claimRewards();
+        uint256 rewardsProfit;
+
+        (profit, loss) = prepareReturn(debtOutstanding);
+
+        if (compTokenAmount > 1 * 10**18) {
+            rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+        }
+
+        debtOutstanding = vault.report(profit + rewardsProfit, loss);
+
+        adjustPosition();
+        
+        emit Harvested(profit, rewardsProfit, loss, debtOutstanding);
+    }
+
+    function liquidatePosition(uint256 amount) public {
+        require(
+            cToken.balanceOfUnderlying(strategyAddr) >= amount,
+            "Strategy: insufficienty balance"
+        );
+
+        if (totalProtocolDebt < amount) {
+            totalProtocolDebt = 0;
+        } else {
+            totalProtocolDebt -= amount;
+        }
+
+        cToken.redeemUnderlying(amount);
+    }
+
+    function adjustPosition() internal returns (uint256 mintResult) {
+        uint256 currentBalance = want.balanceOf(strategyAddr);
+        want.approve(address(cToken), currentBalance);
+
+        totalProtocolDebt += currentBalance;
+        cToken.mint(currentBalance);
+        mintResult = cToken.balanceOfUnderlying(strategyAddr);
+    }
+
     function prepareReturn(uint256 _debtOutstanding)
         internal
         returns (uint256 _profit, uint256 _loss)
@@ -201,15 +191,35 @@ contract Strategy {
         }
     }
 
-    function harvest() external onlyKeepers {
-        uint256 profit;
-        uint256 loss;
-        uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
+    function _claimRewards() private returns (uint256 rewards) {
+        compotroller.claimComp(strategyAddr);
+        rewards = compToken.balanceOf(strategyAddr);
+    }
 
-        (profit, loss) = prepareReturn(debtOutstanding);
+    function _swapRewardsToWantToken(uint256 amountIn)
+        private
+        returns (uint256 profit)
+    {
+        compToken.approve(address(uniswapRouter), amountIn);
 
-        debtOutstanding = vault.report(profit, loss);
+        address[] memory path = new address[](2);
+        path[0] = address(compToken);
+        path[1] = address(want);
+        uint256 amountOutMin = uniswapRouter.getAmountsOut(amountIn, path)[1];
 
-        emit Harvested(profit, loss, debtOutstanding);
+        uint256 balanceBefore = want.balanceOf(strategyAddr);
+
+        uniswapRouter.swapExactTokensForTokens(
+            amountIn,
+            amountOutMin,
+            path,
+            strategyAddr,
+            block.timestamp // сколько поставить?
+        );
+
+        uint256 balanceAfter = want.balanceOf(strategyAddr);
+        profit = balanceAfter > balanceBefore
+            ? balanceAfter - balanceBefore
+            : 0;
     }
 }

@@ -10,27 +10,27 @@ const erc20AbiJson = [
 ];
 const richUserAddr = "0x7182A1B9CF88e87b83E936d3553c91f9E7BeBDD7";  // адрес, на котором есть DAI
 
-describe("Compound", function () {
-    let underlying;
-    let vault;
+describe("Strategy", function () {
     let strategy;
-    let decimals = Math.pow(10, 18);
-    let decimalsBigInt = 10n ** 18n;
+    let vault;
+    let underlying;
     let cToken;
     let cTokenAddress;
     let compToken;
-    let comptroller;
-    let uniswap;
     let signer;
     let owner;
+    let mockAcc1;
+    let decimals = Math.pow(10, 18);
+    let decimalsBigInt = 10n**18n;
 
     beforeEach(async function () {
-        [owner] = await hre.ethers.getSigners();
+        [owner, mockAcc1] = await hre.ethers.getSigners();
 
         await hre.network.provider.request({
             method: 'hardhat_impersonateAccount',
             params: [richUserAddr],
         });
+
         signer = await ethers.getSigner(richUserAddr);
 
         underlying = new ethers.Contract(underlyingAddress, erc20AbiJson, owner);
@@ -54,83 +54,69 @@ describe("Compound", function () {
 
         const Vault = await ethers.getContractFactory("Vault", owner);
         vault = await (await Vault.deploy(underlying.address)).deployed();
-        await underlying.connect(signer).approve(vault.address, 10000n * decimalsBigInt);
+        await underlying.connect(signer).approve(vault.address, 1000n * decimalsBigInt);
 
         const Strategy = await ethers.getContractFactory("Strategy", owner);
         strategy = await (await Strategy.deploy(vault.address, cToken.address)).deployed();
 
-        await vault.addStrategy(strategy.address, 2, 2);
+        await vault.addStrategy(strategy.address, 100);
 
-        await vault.connect(signer).deposit(10000n * decimalsBigInt, signer.address);
-
-        comptroller = new ethers.Contract(
-            '0x3d9819210A31b4961b30EF54bE2aeD79B9c9Cd3B',
-            ['function claimComp(address holder) public'],
-            owner
-        )
-
-        uniswap = new ethers.Contract(
-            '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
-            [
-                'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns(uint[] memory amounts)',
-                'function getAmountsOut(uint amountIn, address[] memory path) public view returns (uint[] memory amounts)'
-            ],
-            owner
-        )
+        await vault.connect(signer).deposit(1000n * decimalsBigInt, signer.address);
     })
 
     it("added liquidity in DAI to Compound protocol", async function () {
         await strategy.harvest();
-        expect((await underlying.balanceOf(strategy.address)) / decimals).eq(10000);
-        await strategy.adjustPosition();
-        expect(await underlying.balanceOf(strategy.address)).eq(0);
-        expect(Math.round(await cToken.balanceOf(strategy.address) / Math.pow(10, 8))).eq(455503);
-        expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(10000);
+
+        expect(Math.round(await cToken.balanceOf(strategy.address) / Math.pow(10, 8))).eq(45550);
+        expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(1000);
     });
 
     it("removed liquidity in DAI to Compound protocol", async function () {
         await strategy.harvest();
-        await strategy.adjustPosition();
 
         await strategy.liquidatePosition(await cToken.callStatic.balanceOfUnderlying(strategy.address));
-        expect(Math.round(await underlying.balanceOf(strategy.address) / decimals)).eq(10000);
+        expect(Math.round(await underlying.balanceOf(strategy.address) / decimals)).eq(1000);
     });
 
-    it("get rewards", async function () {
+    it("claim and swap rewards", async function () {
         await strategy.harvest();
-        await strategy.adjustPosition();
-        await strategy.getRewards();
+        await hre.network.provider.send("hardhat_mine", ["0x10000000"]);
 
-        expect(await compToken.balanceOf(strategy.address)).eq(205215929868);
-    });
-
-    it("swap rewards to want token", async function () {
-        await strategy.harvest();
-        await strategy.adjustPosition();
-
-        await hre.network.provider.send("hardhat_mine", ["0x100000"]);
-
-        await strategy.getRewards();
-        await strategy.swapRewardsToWantToken();
-
-        expect(Math.round(await underlying.balanceOf(strategy.address) / decimals)).eq(27);
+        await expect(strategy.harvest()).emit(strategy, 'Harvested').withArgs(2970892260819298831914n, 211799703003017743664n, 0, 4182691963822316575578n)
+        expect(await compToken.balanceOf(strategy.address) / decimals).eq(0);
     });
 
     it("withdraw and redeem should be worked", async function () {
         await strategy.harvest();
-        await strategy.adjustPosition();
 
-        await vault.connect(signer).withdraw(1000n * decimalsBigInt, signer.address, signer.address);
-        await vault.connect(signer).redeem(1000n * decimalsBigInt, signer.address, signer.address);
+        await vault.connect(signer).withdraw(100n * decimalsBigInt, signer.address, signer.address);
+        await vault.connect(signer).redeem(100n * decimalsBigInt, signer.address, signer.address);
     });
 
-    it("should be written off perfomance fee", async function () {
+    it("should be written off total fee", async function () {
         await strategy.harvest();
-        await strategy.adjustPosition();
-
-        await hre.network.provider.send("hardhat_mine", ["0x1000000"]);
-
+        await hre.network.provider.send("hardhat_mine", ["0x10000000"]);
         await strategy.harvest();
-        expect(Math.round(await vault.balanceOf(owner.address) / decimals)).eq(32);
+
+        expect(Math.round(await vault.balanceOf(owner.address) / decimals)).eq(95);
+    });
+
+    it("should be liquidate all position", async function () {
+        await strategy.harvest();
+        await strategy.liquidateAllPositions();
+
+        expect(Math.round(await underlying.balanceOf(strategy.address) / decimals)).eq(1000);
+    });
+
+    it("should be write strategist address", async function () {
+        await strategy.setStrategist(mockAcc1.address);
+
+        expect(await strategy.strategist()).eq(mockAcc1.address);
+    });
+
+    it("should be write keeper address", async function () {
+        await strategy.setKeeper(mockAcc1.address);
+
+        expect(await strategy.keeper()).eq(mockAcc1.address);
     });
 });

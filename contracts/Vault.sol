@@ -16,19 +16,19 @@ contract Vault is IVault, ERC20 {
     ERC20 public immutable asset;
     uint256 managementFee = 100; // 1% per year
     uint256 SECS_PER_YEAR = 31556952;
-    uint256 MAX_BPS = 10000;
-    uint256 public totalDebt;
+    uint256 MAX_BPS = 10000; // min fee 0,01%
+
     address public management;
     address public strategy;
+    uint256 public totalDebt;
 
     struct StrategyParams {
-        uint256 performanceFee; // Strategist's fee (basis points)
-        uint256 feeDecimals;
-        uint256 activation; // Activation block.timestamp
-        uint256 lastReport; // block.timestamp of the last time a report occured
-        uint256 totalDebt; // Total outstanding debt that Strategy has
-        uint256 totalGain; // Total returns that Strategy has realized for Vault
-        uint256 totalLoss; // Total losses that Strategy has realized for Vault
+        uint256 performanceFee;
+        uint256 activation;
+        uint256 lastReport;
+        uint256 totalDebt;
+        uint256 totalGain;
+        uint256 totalLoss;
     }
 
     mapping(address => StrategyParams) public strategies;
@@ -55,11 +55,7 @@ contract Vault is IVault, ERC20 {
         uint256 currentLoss
     );
 
-    event StrategyAdded(
-        address strategy,
-        uint256 performanceFee,
-        uint256 feeDecimals
-    );
+    event StrategyAdded(address strategy, uint256 performanceFee);
 
     event StrategyReported(
         address strategy,
@@ -82,18 +78,16 @@ contract Vault is IVault, ERC20 {
         return address(asset);
     }
 
-    function addStrategy(
-        address _strategy,
-        uint256 _perfomanceFee,
-        uint256 _feeDecimals
-    ) external onlyAuthorized {
+    function addStrategy(address _strategy, uint256 _perfomanceFee)
+        external
+        onlyAuthorized
+    {
         require(_strategy != address(0), "Vault: ZERO_STRATEGY");
         strategy = _strategy;
         strategies[_strategy].performanceFee = _perfomanceFee;
-        strategies[_strategy].feeDecimals = _feeDecimals;
         strategies[_strategy].activation = block.timestamp;
 
-        emit StrategyAdded(_strategy, _perfomanceFee, _feeDecimals);
+        emit StrategyAdded(_strategy, _perfomanceFee);
     }
 
     function updateManagement(address _management) external onlyAuthorized {
