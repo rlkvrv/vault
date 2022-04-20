@@ -155,10 +155,12 @@ contract Vault is IVault, ERC20 {
         uint256 userLoss;
         uint256 balance = asset.balanceOf(address(this));
 
+        // Если в волте недостаточно средств, запрашиваем у стратегии
         if (balance < assets) {
             uint256 userAssets;
             uint256 strategyDebt = assets - balance;
 
+            // userAssets уже учитывают profit/loss
             (userAssets, userProfit, userLoss) = IStrategy(strategy).withdraw(
                 strategyDebt
             );
@@ -167,6 +169,9 @@ contract Vault is IVault, ERC20 {
         }
 
         _burn(owner, shares);
+        
+        // елсли на волте достаточно средств, то userProfit и userLoss будут 0
+        asset.safeTransfer(receiver, assets + userProfit - userLoss);
 
         emit Withdraw(
             msg.sender,
@@ -178,7 +183,6 @@ contract Vault is IVault, ERC20 {
             userLoss
         );
 
-        asset.safeTransfer(receiver, assets + userProfit - userLoss);
     }
 
     function redeem(
@@ -208,6 +212,8 @@ contract Vault is IVault, ERC20 {
         }
 
         _burn(owner, shares);
+        
+        asset.safeTransfer(receiver, assets + userProfit - userLoss);
 
         emit Withdraw(
             msg.sender,
@@ -218,8 +224,6 @@ contract Vault is IVault, ERC20 {
             userProfit,
             userLoss
         );
-
-        asset.safeTransfer(receiver, assets + userProfit - userLoss);
     }
 
     function report(uint256 gain, uint256 loss)

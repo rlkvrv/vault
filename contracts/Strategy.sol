@@ -163,12 +163,15 @@ contract Strategy {
         uint256 amountFreed = want.balanceOf(strategyAddr);
 
         if (amountFreed >= _amount) {
+            // если на стратегии достаточно want токена, переводим
             want.safeTransfer(msg.sender, _amount);
         } else {
+            // иначе запрашиваем у протокола недоастающие средства, 
             uint256 _protocolDebt = _amount - amountFreed;
             uint256 profit;
             uint256 loss;
             (profit, loss) = prepareReturn(totalProtocolDebt);
+
             _userProfit = (_protocolDebt * profit) / totalProtocolDebt;
             _userLoss = (_protocolDebt * loss) / totalProtocolDebt;
 
@@ -178,6 +181,8 @@ contract Strategy {
 
             liquidatePosition(_amountRequired);
 
+            // теперь на стратегии достаточно средсв для отправки
+            // с учетом текущей прибыли/убытков
             _userAssets = _amount + _userProfit - _userLoss;
             want.safeTransfer(vaultAddr, _userAssets);
         }
