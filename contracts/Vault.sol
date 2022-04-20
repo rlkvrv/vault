@@ -14,6 +14,9 @@ contract Vault is IVault, ERC20 {
     using SafeERC20 for ERC20;
 
     ERC20 public immutable asset;
+    uint256 managementFee = 100; // 1% per year
+    uint256 SECS_PER_YEAR = 31556952;
+    uint256 MAX_BPS = 10000;
     uint256 public totalDebt;
     address public management;
     address public strategy;
@@ -169,7 +172,7 @@ contract Vault is IVault, ERC20 {
         }
 
         _burn(owner, shares);
-        
+
         // елсли на волте достаточно средств, то userProfit и userLoss будут 0
         asset.safeTransfer(receiver, assets + userProfit - userLoss);
 
@@ -182,7 +185,6 @@ contract Vault is IVault, ERC20 {
             userProfit,
             userLoss
         );
-
     }
 
     function redeem(
@@ -212,7 +214,7 @@ contract Vault is IVault, ERC20 {
         }
 
         _burn(owner, shares);
-        
+
         asset.safeTransfer(receiver, assets + userProfit - userLoss);
 
         emit Withdraw(
@@ -342,11 +344,23 @@ contract Vault is IVault, ERC20 {
         uint256 duration = block.timestamp - strategies[_strategy].lastReport;
         assert(duration != 0);
 
-        uint256 _decimals = 10**strategies[_strategy].feeDecimals;
-        uint256 _perfomanceFee = strategies[_strategy].performanceFee;
-        uint256 gainWithFee = (gain * (_decimals - _perfomanceFee)) / _decimals;
-        uint256 fee = gain - gainWithFee;
+        uint256 _currentDebt = strategies[_strategy].totalDebt;
 
-        _mint(management, convertToShares(fee));
+        uint256 totalManagementFee = ((_currentDebt *
+            (MAX_BPS - managementFee)) / MAX_BPS);
+        uint256 _managementFee = (((_currentDebt - totalManagementFee)) *
+            duration) / SECS_PER_YEAR;
+
+        uint256 gainWithPerfomanceFee = (gain *
+            (MAX_BPS - strategies[_strategy].performanceFee)) / MAX_BPS;
+        uint256 perfomanceFee = gain - gainWithPerfomanceFee;
+
+        uint256 totalFee = perfomanceFee + _managementFee;
+
+        if (totalFee > gain) {
+            totalFee = gain;
+        }
+
+        _mint(management, convertToShares(totalFee));
     }
 }
