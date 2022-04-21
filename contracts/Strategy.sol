@@ -31,6 +31,8 @@ contract Strategy {
     address public vaultAddr;
     address public strategyAddr;
     uint256 public totalProtocolDebt; // Total outstanding debt that Protocol has
+    uint256 public lastReport;
+    uint256 public reportDelay = 86400;
 
     constructor(address _vault, address _cErc20Contract) {
         _initialize(_vault, msg.sender, msg.sender, _cErc20Contract);
@@ -39,6 +41,8 @@ contract Strategy {
     event UpdatedStrategist(address newStrategist);
 
     event UpdatedKeeper(address newKeeper);
+
+    event UpdatedReportDelay(uint delay);
 
     event Harvested(
         uint256 profit,
@@ -89,6 +93,16 @@ contract Strategy {
         emit UpdatedKeeper(_keeper);
     }
 
+    function setReportDelay(uint _delay) external onlyAuthorized {
+        reportDelay = _delay;
+        emit UpdatedReportDelay(_delay);
+    }
+
+    function getLastReport() external view returns (uint _lastReport, uint _delay) {
+        _lastReport = lastReport;
+        _delay = reportDelay;
+    }
+
     function liquidateAllPositions() external onlyAuthorized {
         cToken.redeem(cToken.balanceOf(strategyAddr));
         totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
@@ -135,6 +149,11 @@ contract Strategy {
     }
 
     function harvest() external onlyKeepers {
+        require(
+            ((block.timestamp - lastReport) > reportDelay),
+            "Strategy: harvest: Time not elapsed"
+        );
+
         uint256 profit;
         uint256 loss;
         uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
@@ -148,9 +167,10 @@ contract Strategy {
         }
 
         debtOutstanding = vault.report(profit + rewardsProfit, loss);
+        lastReport = block.timestamp;
 
         adjustPosition();
-        
+
         emit Harvested(profit, rewardsProfit, loss, debtOutstanding);
     }
 

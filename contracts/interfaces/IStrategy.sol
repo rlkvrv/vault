@@ -10,4 +10,8 @@ interface IStrategy {
             uint256 _userProfit,
             uint256 _userLoss
         );
+
+    function harvest() external;
+
+    function getLastReport() external view returns (uint _lastReport, uint _delay);
 }

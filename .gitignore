@@ -6,6 +6,7 @@ coverage
 coverage.json
 typechain
 package-lock.json
+gelato
 
 #Hardhat files
 cache
