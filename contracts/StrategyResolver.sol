@@ -7,7 +7,9 @@ import {OpsReady} from "./interfaces/OpsReady.sol";
 import "./interfaces/IOps.sol";
 import "./interfaces/IStrategy.sol";
 
-contract CounterResolver is OpsReady {
+import "hardhat/console.sol";
+
+contract StrategyResolver is OpsReady {
     address public immutable STRATEGY;
 
     constructor(address _strategy, address payable _ops) OpsReady(_ops) {
@@ -16,7 +18,7 @@ contract CounterResolver is OpsReady {
 
     function startTask() external {
         IOps(ops).createTask(
-            address(this),
+            STRATEGY,
             IStrategy.harvest.selector,
             address(this),
             abi.encodeWithSelector(this.checker.selector)
