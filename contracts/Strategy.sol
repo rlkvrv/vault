@@ -30,7 +30,7 @@ contract Strategy {
     address public keeper;
     address public vaultAddr;
     address public strategyAddr;
-    uint256 public totalProtocolDebt; // Total outstanding debt that Protocol has
+    uint256 public totalProtocolDebt;
     uint256 public lastReport;
     uint256 public reportDelay = 86400;
 
@@ -234,7 +234,7 @@ contract Strategy {
             amountOutMin,
             path,
             strategyAddr,
-            block.timestamp // сколько поставить?
+            block.timestamp + 1
         );
 
         uint256 balanceAfter = want.balanceOf(strategyAddr);

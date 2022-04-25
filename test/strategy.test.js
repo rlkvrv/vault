@@ -10,18 +10,23 @@ const erc20AbiJson = [
 ];
 const richUserAddr = "0x7182A1B9CF88e87b83E936d3553c91f9E7BeBDD7";  // адрес, на котором есть DAI
 
+const cTokenAddress = '0x5d3a536e4d6dbd6114cc1ead35777bab948e3643';
+const cTokenAbi = [
+    'function balanceOfUnderlying(address owner) external returns (uint)',
+    'function balanceOf(address owner) external view returns(uint)'
+];
+
 describe("Strategy", function () {
     let strategy;
     let vault;
     let underlying;
     let cToken;
-    let cTokenAddress;
     let compToken;
     let signer;
     let owner;
     let mockAcc1;
     let decimals = Math.pow(10, 18);
-    let decimalsBigInt = 10n**18n;
+    let decimalsBigInt = 10n ** 18n;
 
     beforeEach(async function () {
         [owner, mockAcc1] = await hre.ethers.getSigners();
@@ -35,11 +40,6 @@ describe("Strategy", function () {
 
         underlying = new ethers.Contract(underlyingAddress, erc20AbiJson, owner);
 
-        cTokenAddress = '0x5d3a536e4d6dbd6114cc1ead35777bab948e3643';
-        const cTokenAbi = [
-            'function balanceOfUnderlying(address owner) external returns (uint)',
-            'function balanceOf(address owner) external view returns(uint)'
-        ];
         cToken = new ethers.Contract(cTokenAddress, cTokenAbi, owner);
 
         compToken = new ethers.Contract(
@@ -80,6 +80,7 @@ describe("Strategy", function () {
 
     it("claim and swap rewards", async function () {
         await strategy.harvest();
+
         await hre.network.provider.send("hardhat_mine", ["0x10000000"]);
 
         await expect(strategy.harvest()).emit(strategy, 'Harvested').withArgs(2970892260819298831914n, 211799703003017743664n, 0, 4182691963822316575578n)
