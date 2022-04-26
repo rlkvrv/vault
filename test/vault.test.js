@@ -9,12 +9,14 @@ describe("Vault", function () {
 
     beforeEach(async function () {
         [acc1, acc2, acc3] = await ethers.getSigners();
+
         token = await (await (await ethers.getContractFactory('ERC20Token', acc1))
             .deploy("LampTokenA", "LTA", 10000))
             .deployed();
 
         const Vault = await ethers.getContractFactory("Vault", acc1);
         vault = await (await Vault.deploy(token.address)).deployed();
+
         await token.approve(vault.address, 10000);
 
         const Strategy = await ethers.getContractFactory("Strategy", acc1);
