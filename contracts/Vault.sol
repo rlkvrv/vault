@@ -69,6 +69,8 @@ contract Vault is IVault, ERC20 {
 
     event UpdateManagement(address management);
 
+    event StrategyMigrated(address oldVersion, address newVersion);
+
     modifier onlyAuthorized() {
         require(msg.sender == management, "Vault: ONLY_AUTHORIZED");
         _;
@@ -264,6 +266,33 @@ contract Vault is IVault, ERC20 {
             strategies[msg.sender].totalDebt,
             credit
         );
+    }
+
+    function migrateStrategy(address oldVersion, address newVersion)
+        external
+        onlyAuthorized
+    {
+        require(newVersion != address(0));
+        require(
+            strategies[oldVersion].activation > 0 &&
+                strategies[newVersion].activation == 0
+        );
+
+        StrategyParams memory oldStrategy = strategies[oldVersion];
+
+        strategies[newVersion] = StrategyParams({
+            performanceFee: oldStrategy.performanceFee,
+            activation: block.timestamp, 
+            lastReport: oldStrategy.lastReport,
+            totalDebt: oldStrategy.totalDebt,
+            totalGain: 0,
+            totalLoss: 0
+        });
+
+        strategy = newVersion;
+        IStrategy(oldVersion).migrate(newVersion);
+
+        emit StrategyMigrated(oldVersion, newVersion);
     }
 
     function debtOutstanding(address _strategy) public view returns (uint256) {

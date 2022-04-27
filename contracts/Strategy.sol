@@ -10,6 +10,7 @@ import "./interfaces/ICErc20.sol";
 import "./interfaces/IComptroller.sol";
 import "./interfaces/ICompToken.sol";
 import "./interfaces/IUniswapRouter.sol";
+import "./interfaces/IStrategy.sol";
 
 import "hardhat/console.sol";
 
@@ -61,6 +62,11 @@ contract Strategy {
         _;
     }
 
+    modifier onlyVault() {
+        require(msg.sender == vaultAddr, "Strategy: !vault");
+        _;
+    }
+
     function _initialize(
         address _vault,
         address _strategist,
@@ -79,6 +85,10 @@ contract Strategy {
         keeper = _keeper;
 
         strategyAddr = address(this);
+    }
+
+    function getVaultAddr() external view returns (address) {
+        return vaultAddr;
     }
 
     function setStrategist(address _strategist) external onlyAuthorized {
@@ -108,22 +118,18 @@ contract Strategy {
     }
 
     function liquidateAllPositions() external onlyAuthorized {
-        cToken.redeem(cToken.balanceOf(strategyAddr));
-        totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
-
-        uint256 compTokenAmount = _claimRewards();
-        _swapRewardsToWantToken(compTokenAmount);
+        _liquidateAllPositions();
     }
 
     function withdraw(uint256 _amount)
         external
+        onlyVault
         returns (
             uint256 _userAssets,
             uint256 _userProfit,
             uint256 _userLoss
         )
     {
-        require(msg.sender == vaultAddr, "Strategy: !vault");
         uint256 amountFreed = want.balanceOf(strategyAddr);
 
         if (amountFreed >= _amount) {
@@ -178,6 +184,18 @@ contract Strategy {
         emit Harvested(profit, rewardsProfit, loss, debtOutstanding);
     }
 
+    function migrate(address _newStrategy) external onlyVault {
+        require(IStrategy(_newStrategy).getVaultAddr() == vaultAddr);
+
+        _liquidateAllPositions();
+
+        SafeERC20.safeTransfer(
+            want,
+            _newStrategy,
+            want.balanceOf(address(this))
+        );
+    }
+
     function adjustPosition() internal returns (uint256 mintResult) {
         uint256 currentBalance = want.balanceOf(strategyAddr);
         want.approve(address(cToken), currentBalance);
@@ -213,6 +231,16 @@ contract Strategy {
         }
 
         cToken.redeemUnderlying(amount);
+    }
+
+    function _liquidateAllPositions() private {
+        cToken.redeem(cToken.balanceOf(strategyAddr));
+        totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
+
+        uint256 compTokenAmount = _claimRewards();
+        if (compTokenAmount > 0) {
+            _swapRewardsToWantToken(compTokenAmount);
+        }
     }
 
     function _claimRewards() private returns (uint256 rewards) {

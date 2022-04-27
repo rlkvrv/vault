@@ -13,5 +13,12 @@ interface IStrategy {
 
     function harvest() external;
 
-    function getLastReport() external view returns (uint _lastReport, uint _delay);
+    function getLastReport()
+        external
+        view
+        returns (uint256 _lastReport, uint256 _delay);
+
+    function getVaultAddr() external view returns (address);
+
+    function migrate(address _newStrategy) external;
 }

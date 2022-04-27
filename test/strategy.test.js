@@ -56,40 +56,28 @@ describe("Strategy", function () {
 
         await vault.addStrategy(strategy.address, 100);
         await vault.connect(signer).deposit(1000n * decimalsBigInt, signer.address);
+
+        await strategy.harvest();
     })
 
     it("added liquidity in DAI to Compound protocol", async function () {
-        await strategy.harvest();
-
         expect(Math.round(await cToken.balanceOf(strategy.address) / Math.pow(10, 8))).eq(45550);
         expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(1000);
     });
 
     it("claim and swap rewards", async function () {
-        await strategy.harvest();
-
         await network.provider.send("hardhat_mine", ["0x10000000"]);
 
         await expect(strategy.harvest()).emit(strategy, 'Harvested').withArgs(2970891989119906144222n, 211799707638308526773n, 0, 4182691696758214670995n)
         expect(await compToken.balanceOf(strategy.address) / decimals).eq(0);
     });
 
-    it("removed all liquidity", async function () {
-        await strategy.harvest();
-
-        await strategy.liquidateAllPositions();
-        expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(1000);
-    });
-
     it("withdraw and redeem should be worked", async function () {
-        await strategy.harvest();
-
         await vault.connect(signer).withdraw(100n * decimalsBigInt, signer.address, signer.address);
         await vault.connect(signer).redeem(100n * decimalsBigInt, signer.address, signer.address);
     });
 
     it("should be written off total fee", async function () {
-        await strategy.harvest();
         await network.provider.send("hardhat_mine", ["0x10000000"]);
         await strategy.harvest();
 
@@ -97,10 +85,16 @@ describe("Strategy", function () {
     });
 
     it("should be liquidate all position", async function () {
-        await strategy.harvest();
         await strategy.liquidateAllPositions();
 
         expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(1000);
+    });
+
+    it("should be migrate to the new strategy", async function () {
+        const mockStrategy = await (await (await ethers.getContractFactory("Strategy", owner)).deploy(vault.address, cToken.address)).deployed();
+        await vault.migrateStrategy(strategy.address, mockStrategy.address);
+
+        expect(Math.round(await daiToken.balanceOf(mockStrategy.address) / decimals)).eq(1000);
     });
 
     it("should be write strategist address", async function () {
