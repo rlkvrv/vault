@@ -65,20 +65,20 @@ describe("Strategy", function () {
         expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(1000);
     });
 
-    it("removed liquidity in DAI to Compound protocol", async function () {
-        await strategy.harvest();
-
-        await strategy.liquidatePosition(await cToken.callStatic.balanceOfUnderlying(strategy.address));
-        expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(1000);
-    });
-
     it("claim and swap rewards", async function () {
         await strategy.harvest();
 
         await network.provider.send("hardhat_mine", ["0x10000000"]);
 
-        await expect(strategy.harvest()).emit(strategy, 'Harvested').withArgs(2970892260819298831914n, 211799703003017743664n, 0, 4182691963822316575578n)
+        await expect(strategy.harvest()).emit(strategy, 'Harvested').withArgs(2970891989119906144222n, 211799707638308526773n, 0, 4182691696758214670995n)
         expect(await compToken.balanceOf(strategy.address) / decimals).eq(0);
+    });
+
+    it("removed all liquidity", async function () {
+        await strategy.harvest();
+
+        await strategy.liquidateAllPositions();
+        expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(1000);
     });
 
     it("withdraw and redeem should be worked", async function () {

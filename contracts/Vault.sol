@@ -70,7 +70,7 @@ contract Vault is IVault, ERC20 {
     event UpdateManagement(address management);
 
     modifier onlyAuthorized() {
-        require(msg.sender == management);
+        require(msg.sender == management, "Vault: ONLY_AUTHORIZED");
         _;
     }
 

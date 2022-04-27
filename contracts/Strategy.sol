@@ -42,7 +42,7 @@ contract Strategy {
 
     event UpdatedKeeper(address newKeeper);
 
-    event UpdatedReportDelay(uint delay);
+    event UpdatedReportDelay(uint256 delay);
 
     event Harvested(
         uint256 profit,
@@ -93,12 +93,16 @@ contract Strategy {
         emit UpdatedKeeper(_keeper);
     }
 
-    function setReportDelay(uint _delay) external onlyAuthorized {
+    function setReportDelay(uint256 _delay) external onlyAuthorized {
         reportDelay = _delay;
         emit UpdatedReportDelay(_delay);
     }
 
-    function getLastReport() external view returns (uint _lastReport, uint _delay) {
+    function getLastReport()
+        external
+        view
+        returns (uint256 _lastReport, uint256 _delay)
+    {
         _lastReport = lastReport;
         _delay = reportDelay;
     }
@@ -139,7 +143,7 @@ contract Strategy {
                 ? _protocolDebt - _userLoss
                 : _protocolDebt + _userProfit;
 
-            liquidatePosition(_amountRequired);
+            _liquidatePosition(_amountRequired);
 
             // теперь на стратегии достаточно средсв для отправки
             // с учетом текущей прибыли/убытков
@@ -174,21 +178,6 @@ contract Strategy {
         emit Harvested(profit, rewardsProfit, loss, debtOutstanding);
     }
 
-    function liquidatePosition(uint256 amount) public {
-        require(
-            cToken.balanceOfUnderlying(strategyAddr) >= amount,
-            "Strategy: insufficienty balance"
-        );
-
-        if (totalProtocolDebt < amount) {
-            totalProtocolDebt = 0;
-        } else {
-            totalProtocolDebt -= amount;
-        }
-
-        cToken.redeemUnderlying(amount);
-    }
-
     function adjustPosition() internal returns (uint256 mintResult) {
         uint256 currentBalance = want.balanceOf(strategyAddr);
         want.approve(address(cToken), currentBalance);
@@ -209,6 +198,21 @@ contract Strategy {
         } else if (_debtOutstanding > underlyingBal) {
             _loss = _debtOutstanding - underlyingBal;
         }
+    }
+
+    function _liquidatePosition(uint256 amount) private {
+        require(
+            cToken.balanceOfUnderlying(strategyAddr) >= amount,
+            "Strategy: insufficienty balance"
+        );
+
+        if (totalProtocolDebt < amount) {
+            totalProtocolDebt = 0;
+        } else {
+            totalProtocolDebt -= amount;
+        }
+
+        cToken.redeemUnderlying(amount);
     }
 
     function _claimRewards() private returns (uint256 rewards) {
