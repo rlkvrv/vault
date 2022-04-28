@@ -224,20 +224,25 @@ contract Vault is IVault, ERC20 {
         );
     }
 
-    function report(uint256 gain, uint256 loss)
-        external
-        returns (uint256 debt)
-    {
+    function report(
+        uint256 gain,
+        uint256 loss,
+        uint256 debtPayment
+    ) external returns (uint256 debt) {
         require(
             strategies[msg.sender].activation > 0,
             "Vault: ONLY_APPROVED_STRATEGY"
         );
         uint256 credit = asset.balanceOf(address(this));
 
-        if (credit > 0) {
+        if (credit > 0 && debtPayment == 0) {
             asset.safeTransfer(msg.sender, credit);
             strategies[msg.sender].totalDebt += credit;
             totalDebt += credit;
+        } else if (debtPayment > 0) {
+            asset.safeTransferFrom(msg.sender, address(this), debtPayment + gain);
+            strategies[msg.sender].totalDebt -= debtPayment;
+            totalDebt -= debtPayment;
         }
 
         if (gain > 0) {
@@ -282,7 +287,7 @@ contract Vault is IVault, ERC20 {
 
         strategies[newVersion] = StrategyParams({
             performanceFee: oldStrategy.performanceFee,
-            activation: block.timestamp, 
+            activation: block.timestamp,
             lastReport: oldStrategy.lastReport,
             totalDebt: oldStrategy.totalDebt,
             totalGain: 0,

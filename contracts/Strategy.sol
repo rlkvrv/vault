@@ -34,6 +34,7 @@ contract Strategy {
     uint256 public totalProtocolDebt;
     uint256 public lastReport;
     uint256 public reportDelay = 86400;
+    bool public emergencyExit;
 
     constructor(address _vault, address _cErc20Contract) {
         _initialize(_vault, msg.sender, msg.sender, _cErc20Contract);
@@ -49,8 +50,11 @@ contract Strategy {
         uint256 profit,
         uint256 rewardsProfit,
         uint256 loss,
-        uint256 debtOutstanding
+        uint256 debtOutstanding,
+        uint256 debtPaymant
     );
+
+    event EmergencyExitEnabled();
 
     modifier onlyAuthorized() {
         require(msg.sender == strategist);
@@ -117,10 +121,6 @@ contract Strategy {
         _delay = reportDelay;
     }
 
-    function liquidateAllPositions() external onlyAuthorized {
-        _liquidateAllPositions();
-    }
-
     function withdraw(uint256 _amount)
         external
         onlyVault
@@ -158,9 +158,15 @@ contract Strategy {
         }
     }
 
+    function setEmergencyExit() external onlyAuthorized {
+        emergencyExit = true;
+
+        emit EmergencyExitEnabled();
+    }
+
     function harvest() external onlyKeepers {
         require(
-            ((block.timestamp - lastReport) > reportDelay),
+            ((block.timestamp - lastReport) >= reportDelay),
             "Strategy: harvest: Time not elapsed"
         );
 
@@ -169,19 +175,42 @@ contract Strategy {
         uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
         uint256 compTokenAmount = _claimRewards();
         uint256 rewardsProfit;
+        uint256 debtPayment = 0;
 
-        (profit, loss) = prepareReturn(debtOutstanding);
+        if (emergencyExit) {
+            uint256 amountFreed;
+            (amountFreed, rewardsProfit) = _liquidateAllPositions();
 
-        if (compTokenAmount > 1 * 10**18) {
-            rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+            if (amountFreed < debtOutstanding) {
+                loss = debtOutstanding - amountFreed;
+            } else if (amountFreed > debtOutstanding) {
+                profit = amountFreed - debtOutstanding;
+            }
+            debtPayment = debtOutstanding - loss;
+        } else {
+            (profit, loss) = prepareReturn(debtOutstanding);
+
+            if (compTokenAmount > 1 * 10**18) {
+                rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+            }
         }
 
-        debtOutstanding = vault.report(profit + rewardsProfit, loss);
+        debtOutstanding = vault.report(
+            profit + rewardsProfit,
+            loss,
+            debtPayment
+        );
         lastReport = block.timestamp;
 
         adjustPosition();
 
-        emit Harvested(profit, rewardsProfit, loss, debtOutstanding);
+        emit Harvested(
+            profit,
+            rewardsProfit,
+            loss,
+            debtOutstanding,
+            debtPayment
+        );
     }
 
     function migrate(address _newStrategy) external onlyVault {
@@ -233,13 +262,18 @@ contract Strategy {
         cToken.redeemUnderlying(amount);
     }
 
-    function _liquidateAllPositions() private {
+    function _liquidateAllPositions()
+        private
+        returns (uint256 amountFreed, uint256 rewardsProfit)
+    {
         cToken.redeem(cToken.balanceOf(strategyAddr));
         totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
 
         uint256 compTokenAmount = _claimRewards();
+        amountFreed = want.balanceOf(strategyAddr);
+
         if (compTokenAmount > 0) {
-            _swapRewardsToWantToken(compTokenAmount);
+            rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
         }
     }
 
