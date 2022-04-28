@@ -4,6 +4,7 @@ pragma solidity 0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "./interfaces/IVault.sol";
 import "./interfaces/ICErc20.sol";
@@ -14,7 +15,7 @@ import "./interfaces/IStrategy.sol";
 
 import "hardhat/console.sol";
 
-contract Strategy {
+contract Strategy is Pausable {
     using SafeERC20 for ERC20;
 
     IComptroller compotroller =
@@ -53,6 +54,10 @@ contract Strategy {
         uint256 debtOutstanding,
         uint256 debtPaymant
     );
+
+    event StrategyPaused(uint256 strategyWantToken);
+
+    event StrategyUnpaused(uint256 strategyCToken);
 
     event EmergencyExitEnabled();
 
@@ -158,13 +163,31 @@ contract Strategy {
         }
     }
 
+    function pauseWork() external onlyAuthorized {
+        _pause();
+
+        uint256 amountFreed;
+        uint256 rewardsProfit;
+        (amountFreed, rewardsProfit) = _liquidateAllPositions();
+
+        emit StrategyPaused(amountFreed + rewardsProfit);
+    }
+
+    function unpauseWork() external onlyAuthorized {
+        _unpause();
+
+        uint256 mintResult = adjustPosition();
+
+        emit StrategyUnpaused(mintResult);
+    }
+
     function setEmergencyExit() external onlyAuthorized {
         emergencyExit = true;
 
         emit EmergencyExitEnabled();
     }
 
-    function harvest() external onlyKeepers {
+    function harvest() external onlyKeepers whenNotPaused {
         require(
             ((block.timestamp - lastReport) >= reportDelay),
             "Strategy: harvest: Time not elapsed"
@@ -216,6 +239,7 @@ contract Strategy {
     function migrate(address _newStrategy) external onlyVault {
         require(IStrategy(_newStrategy).getVaultAddr() == vaultAddr);
 
+        _pause();
         _liquidateAllPositions();
 
         SafeERC20.safeTransfer(

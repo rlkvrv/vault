@@ -84,6 +84,21 @@ describe("Strategy", function () {
         expect(Math.round(await vault.balanceOf(owner.address) / decimals)).eq(95);
     });
 
+    it("should be paused", async function () {
+        await strategy.pauseWork();
+   
+        expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(1000);
+        await expect(strategy.harvest()).revertedWith('Pausable: paused');
+    });
+
+    it("should be unpaused", async function () {
+        await strategy.pauseWork();
+        await strategy.unpauseWork();
+   
+        expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(0);
+        expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(1000);
+    });
+
     it("should withdraw funds to vault during an emergency stop", async function () {
         await strategy.setEmergencyExit();
         await network.provider.send("evm_increaseTime", [86400])
