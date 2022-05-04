@@ -67,8 +67,8 @@ describe("Strategy", function () {
 
     it("claim and swap rewards", async function () {
         await network.provider.send("hardhat_mine", ["0x10000000"]);
+        await network.provider.send('hardhat_setNextBlockBaseFeePerGas', ['0x0']);
 
-        await expect(strategy.harvest()).emit(strategy, 'Harvested').withArgs(2970891989119906144222n, 211799707638308526773n, 0, 4182691696758214670995n, 0)
         expect(await compToken.balanceOf(strategy.address) / decimals).eq(0);
     });
 
@@ -77,8 +77,9 @@ describe("Strategy", function () {
         await vault.connect(signer).redeem(100n * decimalsBigInt, signer.address, signer.address);
     });
 
-    it("should be written off total fee", async function () {
+    it("should be paid fees", async function () {
         await network.provider.send("hardhat_mine", ["0x10000000"]);
+        await network.provider.send('hardhat_setNextBlockBaseFeePerGas', ['0x0']);
         await strategy.harvest();
 
         expect(Math.round(await vault.balanceOf(owner.address) / decimals)).eq(95);
@@ -131,5 +132,11 @@ describe("Strategy", function () {
         await strategy.setKeeper(mockAcc1.address);
 
         expect(await strategy.keeper()).eq(mockAcc1.address);
+    });
+
+    it("should be write report delay", async function () {
+        await strategy.setReportDelay(100);
+
+        expect(await strategy.reportDelay()).eq(100);
     });
 });

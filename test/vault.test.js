@@ -25,6 +25,12 @@ describe("Vault", function () {
         await vault.addStrategy(strategy.address, 100);
     })
 
+    it("should be write management address", async function () {
+        await vault.updateManagement(acc2.address);
+
+        expect(await vault.management()).eq(acc2.address);
+    });
+
     it("maxDeposit should be return maxUint", async function () {
         expect(await vault.maxDeposit(acc1.address)).eq(maxUint);
     });
