@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.10;
 
-import {OpsReady} from "./interfaces/OpsReady.sol";
+import {OpsReady} from "./OpsReady.sol";
 
 import "./interfaces/IOps.sol";
 import "./interfaces/IStrategy.sol";
