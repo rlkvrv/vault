@@ -2,8 +2,6 @@
 
 pragma solidity 0.8.10;
 
-import {OpsReady} from "../OpsReady.sol";
-
 interface IOps {
     function createTask(
         address _execAddress,

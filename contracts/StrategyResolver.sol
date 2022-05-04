@@ -2,17 +2,17 @@
 
 pragma solidity 0.8.10;
 
-import {OpsReady} from "./OpsReady.sol";
-
 import "./interfaces/IOps.sol";
 import "./interfaces/IStrategy.sol";
 
 import "hardhat/console.sol";
 
-contract StrategyResolver is OpsReady {
+contract StrategyResolver {
     address public immutable STRATEGY;
+    address public immutable ops;
 
-    constructor(address _strategy, address payable _ops) OpsReady(_ops) {
+    constructor(address _strategy, address _ops) {
+        ops = _ops;
         STRATEGY = _strategy;
     }
 
