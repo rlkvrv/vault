@@ -86,7 +86,7 @@ describe("Strategy", function () {
 
     it("should be paused", async function () {
         await strategy.pauseWork();
-   
+
         expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(1000);
         await expect(strategy.harvest()).revertedWith('Pausable: paused');
     });
@@ -94,7 +94,7 @@ describe("Strategy", function () {
     it("should be unpaused", async function () {
         await strategy.pauseWork();
         await strategy.unpauseWork();
-   
+
         expect(Math.round(await daiToken.balanceOf(strategy.address) / decimals)).eq(0);
         expect(Math.round(await cToken.callStatic.balanceOfUnderlying(strategy.address) / decimals)).eq(1000);
     });
@@ -112,6 +112,13 @@ describe("Strategy", function () {
         await vault.migrateStrategy(strategy.address, mockStrategy.address);
 
         expect(Math.round(await daiToken.balanceOf(mockStrategy.address) / decimals)).eq(1000);
+    });
+
+    it("should be added several strategies", async function () {
+        await vault.addStrategy(mockAcc1.address, 100);
+
+        expect(await vault.withdrawalQueue(0)).eq(strategy.address);
+        expect(await vault.withdrawalQueue(1)).eq(mockAcc1.address);
     });
 
     it("should be write strategist address", async function () {
