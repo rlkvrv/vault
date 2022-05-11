@@ -400,8 +400,8 @@ contract Vault is IVault, ERC20 {
             (userAssets, _profit, _loss) = IStrategy(strategy).withdraw(
                 strategyDebt
             );
-            strategies[strategy].totalDebt -= userAssets;
-            totalDebt -= userAssets;
+            strategies[strategy].totalDebt -= strategyDebt;
+            totalDebt -= strategyDebt;
 
             userProfit += _profit;
             userLoss += _loss;
