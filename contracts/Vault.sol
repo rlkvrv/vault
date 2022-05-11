@@ -389,19 +389,19 @@ contract Vault is IVault, ERC20 {
 
             if (vaultBalance >= assets) break;
 
-            uint256 strategyDebt = assets - vaultBalance;
+            uint256 withdrawAmount = assets - vaultBalance;
 
-            strategyDebt = Math.min(
-                strategyDebt,
+            withdrawAmount = Math.min(
+                withdrawAmount,
                 strategies[strategy].totalDebt
             );
 
             // userAssets уже учитывает profit/loss
             (userAssets, _profit, _loss) = IStrategy(strategy).withdraw(
-                strategyDebt
+                withdrawAmount
             );
-            strategies[strategy].totalDebt -= strategyDebt;
-            totalDebt -= strategyDebt;
+            strategies[strategy].totalDebt -= withdrawAmount;
+            totalDebt -= withdrawAmount;
 
             userProfit += _profit;
             userLoss += _loss;
