@@ -154,7 +154,7 @@ contract Vault is IVault, ERC20 {
     ) external returns (uint256 shares) {
         shares = previewWithdraw(requestedAssets);
         if (msg.sender != owner) {
-            _spendAllowance(owner, receiver, requestedAssets);
+            _spendAllowance(owner, msg.sender, requestedAssets);
         }
 
         uint256 userProfit;
@@ -188,7 +188,7 @@ contract Vault is IVault, ERC20 {
         require((assets = previewRedeem(shares)) != 0, "Vault: ZERO_ASSETS");
 
         if (msg.sender != owner) {
-            _spendAllowance(owner, receiver, assets);
+            _spendAllowance(owner, msg.sender, assets);
         }
 
         uint256 userProfit;
