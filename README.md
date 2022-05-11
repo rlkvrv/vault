@@ -1,15 +1,13 @@
 # Basic Sample Hardhat Project
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts.
+Vault
 
-Try running some of the following tasks:
+```npx hardhat test``` - запуск тестов в режиме форка mainnet
 
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-node scripts/sample-script.js
-npx hardhat help
-```
+```npx hardhat coverage``` - покрытие тестами
+
+```npx hardhat test test/gelato.test.js``` - запуск тестов автоматизации
+
+```npx hardhat test test/strategy.test.js``` - запуск тестов стратегии
+
+```npx hardhat test test/vault.test.js``` - запуск тестов волта
