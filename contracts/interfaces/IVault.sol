@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.10;
 
+// EIP-4626: Tokenized Vault Standard - https://eips.ethereum.org/EIPS/eip-4626
+
 interface IVault {
     function token() external view returns (address wantToken);
 
