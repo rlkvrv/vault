@@ -1,6 +1,4 @@
-# Basic Sample Hardhat Project
-
-Vault
+# Vault
 
 ```npx hardhat test``` - запуск тестов в режиме форка mainnet
 
