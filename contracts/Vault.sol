@@ -51,10 +51,8 @@ contract Vault is IVault, ERC20 {
         address indexed caller,
         address indexed receiver,
         address indexed owner,
-        uint256 assets,
-        uint256 shares,
-        uint256 currentProfit,
-        uint256 currentLoss
+        uint256 requestedAssets,
+        uint256 receivedAssets
     );
 
     event StrategyAdded(address strategy, uint256 performanceFee);
@@ -150,36 +148,35 @@ contract Vault is IVault, ERC20 {
     }
 
     function withdraw(
-        uint256 assets,
+        uint256 requestedAssets,
         address receiver,
         address owner
     ) external returns (uint256 shares) {
-        shares = previewWithdraw(assets);
+        shares = previewWithdraw(requestedAssets);
         if (msg.sender != owner) {
-            _spendAllowance(owner, receiver, assets);
+            _spendAllowance(owner, receiver, requestedAssets);
         }
 
         uint256 userProfit;
         uint256 userLoss;
 
         // Если в волте недостаточно средств, запрашиваем у стратегии
-        if (asset.balanceOf(address(this)) < assets) {
-            (userProfit, userLoss) = _withdrawFromStrategies(assets);
+        if (asset.balanceOf(address(this)) < requestedAssets) {
+            (userProfit, userLoss) = _withdrawFromStrategies(requestedAssets);
         }
 
         _burn(owner, shares);
 
         // елсли на волте достаточно средств, то userProfit и userLoss будут 0
-        asset.safeTransfer(receiver, assets + userProfit - userLoss);
+        uint256 receivedAssets = requestedAssets + userProfit - userLoss;
+        asset.safeTransfer(receiver, receivedAssets);
 
         emit Withdraw(
             msg.sender,
             receiver,
             owner,
-            assets,
-            shares,
-            userProfit,
-            userLoss
+            requestedAssets,
+            receivedAssets
         );
     }
 
@@ -203,16 +200,15 @@ contract Vault is IVault, ERC20 {
 
         _burn(owner, shares);
 
-        asset.safeTransfer(receiver, assets + userProfit - userLoss);
+        uint256 receivedAssets = assets + userProfit - userLoss;
+        asset.safeTransfer(receiver, receivedAssets);
 
         emit Withdraw(
             msg.sender,
             receiver,
             owner,
             assets,
-            shares,
-            userProfit,
-            userLoss
+            receivedAssets
         );
     }
 
