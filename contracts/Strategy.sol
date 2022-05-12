@@ -35,6 +35,7 @@ contract Strategy is Pausable {
     uint256 public totalProtocolDebt;
     uint256 public lastReport;
     uint256 public reportDelay = 86400;
+    uint256 public minRewardsAmount = 1 * 10**18;
     bool public emergencyExit;
 
     constructor(address _vault, address _cErc20Contract) {
@@ -60,6 +61,8 @@ contract Strategy is Pausable {
     event StrategyUnpaused(uint256 strategyCToken);
 
     event EmergencyExitEnabled();
+
+    event UpdatedMinRewardsAmount(uint256 amount);
 
     modifier onlyAuthorized() {
         require(msg.sender == strategist);
@@ -115,6 +118,11 @@ contract Strategy is Pausable {
     function setReportDelay(uint256 _delay) external onlyAuthorized {
         reportDelay = _delay;
         emit UpdatedReportDelay(_delay);
+    }
+
+    function setMinRewardsAmount(uint256 _newAmount) external onlyAuthorized {
+        minRewardsAmount = _newAmount;
+        emit UpdatedMinRewardsAmount(_newAmount);
     }
 
     function getLastReport()
@@ -196,7 +204,7 @@ contract Strategy is Pausable {
         uint256 profit;
         uint256 loss;
         uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
-        uint256 compTokenAmount = _claimRewards();
+        uint256 rewardsAmount = _claimRewards();
         uint256 rewardsProfit;
         uint256 debtPayment = 0;
 
@@ -213,8 +221,8 @@ contract Strategy is Pausable {
         } else {
             (profit, loss) = prepareReturn(debtOutstanding);
 
-            if (compTokenAmount > 1 * 10**18) {
-                rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+            if (rewardsAmount > minRewardsAmount) {
+                rewardsProfit = _swapRewardsToWantToken(rewardsAmount);
             }
         }
 
@@ -293,11 +301,11 @@ contract Strategy is Pausable {
         cToken.redeem(cToken.balanceOf(strategyAddr));
         totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
 
-        uint256 compTokenAmount = _claimRewards();
+        uint256 rewardsAmount = _claimRewards();
         amountFreed = want.balanceOf(strategyAddr);
 
-        if (compTokenAmount > 0) {
-            rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+        if (rewardsAmount > 0) {
+            rewardsProfit = _swapRewardsToWantToken(rewardsAmount);
         }
     }
 
