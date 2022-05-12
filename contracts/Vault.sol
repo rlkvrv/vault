@@ -4,6 +4,7 @@ pragma solidity 0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 import "./interfaces/IVault.sol";
@@ -11,7 +12,7 @@ import "./interfaces/IStrategy.sol";
 
 import "hardhat/console.sol";
 
-contract Vault is IVault, ERC20 {
+contract Vault is IVault, ERC20, ReentrancyGuard {
     using SafeERC20 for ERC20;
 
     ERC20 public immutable asset;
@@ -123,6 +124,7 @@ contract Vault is IVault, ERC20 {
 
     function deposit(uint256 assets, address receiver)
         external
+        nonReentrant
         returns (uint256 shares)
     {
         require((shares = convertToShares(assets)) != 0, "Vault: ZERO_SHARES");
@@ -136,6 +138,7 @@ contract Vault is IVault, ERC20 {
 
     function mint(uint256 shares, address receiver)
         external
+        nonReentrant
         returns (uint256 assets)
     {
         require((assets = convertToAssets(shares)) != 0, "Vault: ZERO_ASSETS");
@@ -151,7 +154,7 @@ contract Vault is IVault, ERC20 {
         uint256 requestedAssets,
         address receiver,
         address owner
-    ) external returns (uint256 shares) {
+    ) external nonReentrant returns (uint256 shares) {
         shares = convertToShares(requestedAssets);
         if (msg.sender != owner) {
             _spendAllowance(owner, msg.sender, requestedAssets);
@@ -184,7 +187,7 @@ contract Vault is IVault, ERC20 {
         uint256 shares,
         address receiver,
         address owner
-    ) external returns (uint256 assets) {
+    ) external nonReentrant returns (uint256 assets) {
         require((assets = convertToAssets(shares)) != 0, "Vault: ZERO_ASSETS");
 
         if (msg.sender != owner) {
@@ -203,20 +206,14 @@ contract Vault is IVault, ERC20 {
         uint256 receivedAssets = assets + userProfit - userLoss;
         asset.safeTransfer(receiver, receivedAssets);
 
-        emit Withdraw(
-            msg.sender,
-            receiver,
-            owner,
-            assets,
-            receivedAssets
-        );
+        emit Withdraw(msg.sender, receiver, owner, assets, receivedAssets);
     }
 
     function report(
         uint256 gain,
         uint256 loss,
         uint256 debtPayment
-    ) external returns (uint256 debt) {
+    ) external nonReentrant returns (uint256 debt) {
         require(
             strategies[msg.sender].activation > 0,
             "Vault: ONLY_APPROVED_STRATEGY"

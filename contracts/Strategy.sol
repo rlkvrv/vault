@@ -4,6 +4,7 @@ pragma solidity 0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "./interfaces/IVault.sol";
@@ -15,7 +16,7 @@ import "./interfaces/IStrategy.sol";
 
 import "hardhat/console.sol";
 
-contract Strategy is Pausable {
+contract Strategy is Pausable, ReentrancyGuard {
     using SafeERC20 for ERC20;
 
     IComptroller compotroller =
@@ -137,6 +138,7 @@ contract Strategy is Pausable {
     function withdraw(uint256 _amount)
         external
         onlyVault
+        nonReentrant
         returns (
             uint256 _userAssets,
             uint256 _userProfit,
@@ -195,7 +197,7 @@ contract Strategy is Pausable {
         emit EmergencyExitEnabled();
     }
 
-    function harvest() external onlyKeepers whenNotPaused {
+    function harvest() external nonReentrant onlyKeepers whenNotPaused {
         require(
             ((block.timestamp - lastReport) >= reportDelay),
             "Strategy: harvest: Time not elapsed"
