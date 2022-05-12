@@ -160,14 +160,14 @@ contract Vault is IVault, ERC20 {
         uint256 userProfit;
         uint256 userLoss;
 
-        // Если в волте недостаточно средств, запрашиваем у стратегии
+        // If there are not funds in the Vault - send request to Strategy
         if (asset.balanceOf(address(this)) < requestedAssets) {
             (userProfit, userLoss) = _withdrawFromStrategies(requestedAssets);
         }
 
         _burn(owner, shares);
 
-        // елсли на волте достаточно средств, то userProfit и userLoss будут 0
+        // If there are funds, then userProfit and userLoss will be 0
         uint256 receivedAssets = requestedAssets + userProfit - userLoss;
         asset.safeTransfer(receiver, receivedAssets);
 
@@ -392,7 +392,7 @@ contract Vault is IVault, ERC20 {
                 strategies[strategy].totalDebt
             );
 
-            // userAssets уже учитывает profit/loss
+            // userAssets includes profit/loss
             (userAssets, _profit, _loss) = IStrategy(strategy).withdraw(
                 withdrawAmount
             );

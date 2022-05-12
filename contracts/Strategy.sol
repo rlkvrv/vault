@@ -138,10 +138,10 @@ contract Strategy is Pausable {
         uint256 amountFreed = want.balanceOf(strategyAddr);
 
         if (amountFreed >= _amount) {
-            // если на стратегии достаточно want токена, переводим
+            // If there is enough want token in the strategy, we transfer funds
             want.safeTransfer(msg.sender, _amount);
         } else {
-            // иначе запрашиваем у протокола недоастающие средства,
+            // Otherwise, we ask the protocol for the missing funds
             uint256 _protocolDebt = _amount - amountFreed;
             uint256 profit;
             uint256 loss;
@@ -156,8 +156,8 @@ contract Strategy is Pausable {
 
             _liquidatePosition(_amountRequired);
 
-            // теперь на стратегии достаточно средсв для отправки
-            // с учетом текущей прибыли/убытков
+            // Now the strategy has enough funds to send
+            // taking into account current profit/loss
             _userAssets = _amount + _userProfit - _userLoss;
             want.safeTransfer(vaultAddr, _userAssets);
         }
