@@ -54,18 +54,4 @@ interface IVault {
         external
         view
         returns (uint256 assets);
-
-    function previewDeposit(uint256 assets)
-        external
-        view
-        returns (uint256 shares);
-
-    function previewMint(uint256 shares) external view returns (uint256 assets);
-
-    function previewRedeem(uint256 shares)
-        external
-        view
-        returns (uint256 assets);
-
-    function previewWithdraw(uint256 assets) external view returns (uint256);
 }

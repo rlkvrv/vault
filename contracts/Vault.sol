@@ -125,7 +125,7 @@ contract Vault is IVault, ERC20 {
         external
         returns (uint256 shares)
     {
-        require((shares = previewDeposit(assets)) != 0, "Vault: ZERO_SHARES");
+        require((shares = convertToShares(assets)) != 0, "Vault: ZERO_SHARES");
 
         asset.safeTransferFrom(msg.sender, address(this), assets);
 
@@ -138,7 +138,7 @@ contract Vault is IVault, ERC20 {
         external
         returns (uint256 assets)
     {
-        require((assets = previewMint(shares)) != 0, "Vault: ZERO_ASSETS");
+        require((assets = convertToAssets(shares)) != 0, "Vault: ZERO_ASSETS");
 
         asset.safeTransferFrom(msg.sender, address(this), assets);
 
@@ -152,7 +152,7 @@ contract Vault is IVault, ERC20 {
         address receiver,
         address owner
     ) external returns (uint256 shares) {
-        shares = previewWithdraw(requestedAssets);
+        shares = convertToShares(requestedAssets);
         if (msg.sender != owner) {
             _spendAllowance(owner, msg.sender, requestedAssets);
         }
@@ -185,7 +185,7 @@ contract Vault is IVault, ERC20 {
         address receiver,
         address owner
     ) external returns (uint256 assets) {
-        require((assets = previewRedeem(shares)) != 0, "Vault: ZERO_ASSETS");
+        require((assets = convertToAssets(shares)) != 0, "Vault: ZERO_ASSETS");
 
         if (msg.sender != owner) {
             _spendAllowance(owner, msg.sender, assets);
@@ -327,44 +327,6 @@ contract Vault is IVault, ERC20 {
 
         return
             totalSupply == 0 ? shares : (shares * totalAssets()) / totalSupply;
-    }
-
-    function previewDeposit(uint256 assets)
-        public
-        view
-        returns (uint256 shares)
-    {
-        return convertToShares(assets);
-    }
-
-    function previewMint(uint256 shares) public view returns (uint256 assets) {
-        uint256 totalSupply = totalSupply();
-        uint256 numerator = shares * totalAssets();
-        uint256 isZero = (numerator) == 0 ? 0 : 1;
-
-        return
-            totalSupply == 0
-                ? shares
-                : (((numerator - 1) / totalSupply) + 1) * isZero;
-    }
-
-    function previewRedeem(uint256 shares)
-        public
-        view
-        returns (uint256 assets)
-    {
-        return convertToAssets(shares);
-    }
-
-    function previewWithdraw(uint256 assets) public view returns (uint256) {
-        uint256 totalSupply = totalSupply();
-        uint256 numerator = assets * totalSupply;
-        uint256 isZero = (numerator) == 0 ? 0 : 1;
-
-        return
-            totalSupply == 0
-                ? assets
-                : (((numerator - 1) / totalAssets()) + 1) * isZero;
     }
 
     function _withdrawFromStrategies(uint256 assets)
