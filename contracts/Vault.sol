@@ -165,7 +165,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
     ) external nonReentrant returns (uint256 shares) {
         shares = convertToShares(requestedAssets);
         if (msg.sender != owner) {
-            _spendAllowance(owner, msg.sender, requestedAssets);
+            _spendAllowance(owner, msg.sender, shares);
         }
 
         uint256 userProfit;
@@ -200,7 +200,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         require((assets = convertToAssets(shares)) != 0, "Vault: ZERO_ASSETS");
 
         if (msg.sender != owner) {
-            _spendAllowance(owner, msg.sender, assets);
+            _spendAllowance(owner, msg.sender, shares);
         }
 
         uint256 userProfit;
