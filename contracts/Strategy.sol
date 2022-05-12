@@ -4,6 +4,7 @@ pragma solidity 0.8.10;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "./interfaces/IVault.sol";
@@ -15,7 +16,7 @@ import "./interfaces/IStrategy.sol";
 
 import "hardhat/console.sol";
 
-contract Strategy is Pausable {
+contract Strategy is Pausable, ReentrancyGuard {
     using SafeERC20 for ERC20;
 
     IComptroller compotroller =
@@ -35,6 +36,7 @@ contract Strategy is Pausable {
     uint256 public totalProtocolDebt;
     uint256 public lastReport;
     uint256 public reportDelay = 86400;
+    uint256 public minRewardsAmount = 1 * 10**18;
     bool public emergencyExit;
 
     constructor(address _vault, address _cErc20Contract) {
@@ -60,6 +62,8 @@ contract Strategy is Pausable {
     event StrategyUnpaused(uint256 strategyCToken);
 
     event EmergencyExitEnabled();
+
+    event UpdatedMinRewardsAmount(uint256 amount);
 
     modifier onlyAuthorized() {
         require(msg.sender == strategist);
@@ -117,6 +121,11 @@ contract Strategy is Pausable {
         emit UpdatedReportDelay(_delay);
     }
 
+    function setMinRewardsAmount(uint256 _newAmount) external onlyAuthorized {
+        minRewardsAmount = _newAmount;
+        emit UpdatedMinRewardsAmount(_newAmount);
+    }
+
     function getLastReport()
         external
         view
@@ -129,6 +138,7 @@ contract Strategy is Pausable {
     function withdraw(uint256 _amount)
         external
         onlyVault
+        nonReentrant
         returns (
             uint256 _userAssets,
             uint256 _userProfit,
@@ -138,10 +148,10 @@ contract Strategy is Pausable {
         uint256 amountFreed = want.balanceOf(strategyAddr);
 
         if (amountFreed >= _amount) {
-            // если на стратегии достаточно want токена, переводим
+            // If there is enough want token in the strategy, we transfer funds
             want.safeTransfer(msg.sender, _amount);
         } else {
-            // иначе запрашиваем у протокола недоастающие средства,
+            // Otherwise, we ask the protocol for the missing funds
             uint256 _protocolDebt = _amount - amountFreed;
             uint256 profit;
             uint256 loss;
@@ -156,8 +166,8 @@ contract Strategy is Pausable {
 
             _liquidatePosition(_amountRequired);
 
-            // теперь на стратегии достаточно средсв для отправки
-            // с учетом текущей прибыли/убытков
+            // Now the strategy has enough funds to send
+            // taking into account current profit/loss
             _userAssets = _amount + _userProfit - _userLoss;
             want.safeTransfer(vaultAddr, _userAssets);
         }
@@ -187,7 +197,7 @@ contract Strategy is Pausable {
         emit EmergencyExitEnabled();
     }
 
-    function harvest() external onlyKeepers whenNotPaused {
+    function harvest() external nonReentrant onlyKeepers whenNotPaused {
         require(
             ((block.timestamp - lastReport) >= reportDelay),
             "Strategy: harvest: Time not elapsed"
@@ -196,7 +206,7 @@ contract Strategy is Pausable {
         uint256 profit;
         uint256 loss;
         uint256 debtOutstanding = vault.debtOutstanding(strategyAddr);
-        uint256 compTokenAmount = _claimRewards();
+        uint256 rewardsAmount = _claimRewards();
         uint256 rewardsProfit;
         uint256 debtPayment = 0;
 
@@ -213,8 +223,8 @@ contract Strategy is Pausable {
         } else {
             (profit, loss) = prepareReturn(debtOutstanding);
 
-            if (compTokenAmount > 1 * 10**18) {
-                rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+            if (rewardsAmount > minRewardsAmount) {
+                rewardsProfit = _swapRewardsToWantToken(rewardsAmount);
             }
         }
 
@@ -293,11 +303,11 @@ contract Strategy is Pausable {
         cToken.redeem(cToken.balanceOf(strategyAddr));
         totalProtocolDebt = cToken.balanceOfUnderlying(strategyAddr);
 
-        uint256 compTokenAmount = _claimRewards();
+        uint256 rewardsAmount = _claimRewards();
         amountFreed = want.balanceOf(strategyAddr);
 
-        if (compTokenAmount > 0) {
-            rewardsProfit = _swapRewardsToWantToken(compTokenAmount);
+        if (rewardsAmount > 0) {
+            rewardsProfit = _swapRewardsToWantToken(rewardsAmount);
         }
     }
 

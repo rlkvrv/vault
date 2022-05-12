@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.10;
 
+// EIP-4626: Tokenized Vault Standard - https://eips.ethereum.org/EIPS/eip-4626
+
 interface IVault {
     function token() external view returns (address wantToken);
 
@@ -52,18 +54,4 @@ interface IVault {
         external
         view
         returns (uint256 assets);
-
-    function previewDeposit(uint256 assets)
-        external
-        view
-        returns (uint256 shares);
-
-    function previewMint(uint256 shares) external view returns (uint256 assets);
-
-    function previewRedeem(uint256 shares)
-        external
-        view
-        returns (uint256 assets);
-
-    function previewWithdraw(uint256 assets) external view returns (uint256);
 }
