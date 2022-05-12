@@ -53,7 +53,8 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         address indexed receiver,
         address indexed owner,
         uint256 requestedAssets,
-        uint256 receivedAssets
+        uint256 receivedAssets,
+        uint256 shares
     );
 
     event StrategyAdded(address strategy, uint256 performanceFee);
@@ -72,7 +73,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
 
     event StrategyMigrated(address oldVersion, address newVersion);
 
-    event UpdateMaxStrategiesAmount(uint256 amount);
+    event UpdateMaxStrategies(uint256 amount);
 
     modifier onlyAuthorized() {
         require(msg.sender == management, "Vault: ONLY_AUTHORIZED");
@@ -89,13 +90,10 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         emit UpdateManagement(management);
     }
 
-    function updateMaxStrategiesAmount(uint256 _newAmount)
-        external
-        onlyAuthorized
-    {
+    function updateMaxStrategies(uint256 _newAmount) external onlyAuthorized {
         maxStrategies = _newAmount;
 
-        emit UpdateMaxStrategiesAmount(_newAmount);
+        emit UpdateMaxStrategies(_newAmount);
     }
 
     function maxDeposit(address) external pure returns (uint256) {
@@ -189,7 +187,8 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             receiver,
             owner,
             requestedAssets,
-            receivedAssets
+            receivedAssets,
+            shares
         );
     }
 
@@ -216,7 +215,14 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         uint256 receivedAssets = assets + userProfit - userLoss;
         asset.safeTransfer(receiver, receivedAssets);
 
-        emit Withdraw(msg.sender, receiver, owner, assets, receivedAssets);
+        emit Withdraw(
+            msg.sender,
+            receiver,
+            owner,
+            assets,
+            receivedAssets,
+            shares
+        );
     }
 
     function report(
