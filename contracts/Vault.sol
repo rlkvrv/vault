@@ -16,14 +16,14 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
     using SafeERC20 for ERC20;
 
     ERC20 public immutable asset;
-    uint256 managementFee = 100; // 1% per year
-    uint256 SECS_PER_YEAR = 31556952;
+    uint256 public maxStrategies = 10;
+    uint256 public managementFee = 100; // 1% per year
     uint256 MAX_BPS = 10000; // min fee 0,01%
-    uint256 constant MAX_STRATEGIES = 10;
+    uint256 SECS_PER_YEAR = 31556952;
 
     address public management;
     uint256 public totalDebt;
-    address[MAX_STRATEGIES] public withdrawalQueue;
+    address[] public withdrawalQueue;
 
     struct StrategyParams {
         uint256 performanceFee;
@@ -72,6 +72,8 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
 
     event StrategyMigrated(address oldVersion, address newVersion);
 
+    event UpdateMaxStrategiesAmount(uint256 amount);
+
     modifier onlyAuthorized() {
         require(msg.sender == management, "Vault: ONLY_AUTHORIZED");
         _;
@@ -85,6 +87,15 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         management = _management;
 
         emit UpdateManagement(management);
+    }
+
+    function updateMaxStrategiesAmount(uint256 _newAmount)
+        external
+        onlyAuthorized
+    {
+        maxStrategies = _newAmount;
+
+        emit UpdateMaxStrategiesAmount(_newAmount);
     }
 
     function maxDeposit(address) external pure returns (uint256) {
@@ -109,15 +120,14 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
     {
         require(_strategy != address(0), "Vault: ZERO_STRATEGY");
         require(
-            withdrawalQueue[MAX_STRATEGIES - 1] == address(0),
+            withdrawalQueue.length < maxStrategies,
             "Vault: ADDED_MAX_STRATEGIES"
         );
 
         strategies[_strategy].performanceFee = _perfomanceFee;
         strategies[_strategy].activation = block.timestamp;
 
-        withdrawalQueue[MAX_STRATEGIES - 1] = _strategy;
-        _organizeWithdrawalQueue();
+        withdrawalQueue.push(_strategy);
 
         emit StrategyAdded(_strategy, _perfomanceFee);
     }
@@ -288,7 +298,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         IStrategy(oldVersion).migrate(newVersion);
         emit StrategyMigrated(oldVersion, newVersion);
 
-        for (uint256 i; i < MAX_STRATEGIES; i++) {
+        for (uint256 i; i < withdrawalQueue.length; i++) {
             if (withdrawalQueue[i] == oldVersion) {
                 withdrawalQueue[i] = newVersion;
                 break;
@@ -335,10 +345,8 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         uint256 _profit;
         uint256 _loss;
 
-        for (uint256 i; i < MAX_STRATEGIES; i++) {
+        for (uint256 i; i < withdrawalQueue.length; i++) {
             strategy = withdrawalQueue[i];
-
-            if (withdrawalQueue[i] == address(0)) break;
 
             uint256 vaultBalance = asset.balanceOf(address(this));
 
@@ -385,20 +393,5 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         }
 
         _mint(management, convertToShares(totalFee));
-    }
-
-    function _organizeWithdrawalQueue() private {
-        uint256 offset;
-
-        for (uint256 i; i < MAX_STRATEGIES; i++) {
-            address strategy = withdrawalQueue[i];
-
-            if (strategy == address(0)) {
-                offset += 1;
-            } else if (offset > 0) {
-                withdrawalQueue[i - offset] = strategy;
-                withdrawalQueue[i] = address(0);
-            }
-        }
     }
 }

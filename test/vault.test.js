@@ -74,4 +74,9 @@ describe("Vault", function () {
         expect(await vault.allowance(acc1.address, acc2.address)).eq(50);
         await expect(vault.connect(acc2).redeem(100, acc2.address, acc1.address)).revertedWith('ERC20: insufficient allowance');
     });
+
+    it("updateMaxStrategiesAmount should be updated maxStrategies amount", async function () {
+        await vault.updateMaxStrategiesAmount(20);
+        expect(await vault.maxStrategies()).eq(20);
+    });
 });
