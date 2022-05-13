@@ -402,6 +402,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
     }
 
     function _assessFees(address _strategy, uint256 gain) private {
+        if (strategies[_strategy].lastReport == 0) return;
         uint256 duration = block.timestamp - strategies[_strategy].lastReport;
         assert(duration != 0);
 
