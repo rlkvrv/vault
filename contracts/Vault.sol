@@ -384,10 +384,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
 
         uint256 _currentDebt = strategies[_strategy].totalDebt;
 
-        uint256 totalManagementFee = ((_currentDebt *
-            (MAX_BPS - managementFee)) / MAX_BPS);
-        uint256 _managementFee = (((_currentDebt - totalManagementFee)) *
-            duration) / SECS_PER_YEAR;
+        uint256 _managementFee = _currentDebt * managementFee * duration / (MAX_BPS * SECS_PER_YEAR);
 
         uint256 perfomanceFee = gain * strategies[_strategy].performanceFee / MAX_BPS;
 
