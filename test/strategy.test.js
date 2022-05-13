@@ -110,7 +110,7 @@ describe("Strategy", function () {
 
     it("should be migrate to the new strategy", async function () {
         const mockStrategy = await (await (await ethers.getContractFactory("Strategy", owner)).deploy(vault.address, cToken.address)).deployed();
-        await vault.migrateStrategy(strategy.address, mockStrategy.address);
+        await vault.migrateStrategy(strategy.address, mockStrategy.address, 100);
 
         expect(Math.round(await daiToken.balanceOf(mockStrategy.address) / decimals)).eq(1000);
     });

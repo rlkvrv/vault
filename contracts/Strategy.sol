@@ -65,6 +65,11 @@ contract Strategy is Pausable, ReentrancyGuard {
 
     event UpdatedMinRewardsAmount(uint256 amount);
 
+    modifier onlyGovernance() {
+        require(msg.sender == strategist || msg.sender == vaultAddr);
+        _;
+    }
+
     modifier onlyAuthorized() {
         require(msg.sender == strategist);
         _;
@@ -150,6 +155,7 @@ contract Strategy is Pausable, ReentrancyGuard {
         if (amountFreed >= _amount) {
             // If there is enough want token in the strategy, we transfer funds
             want.safeTransfer(msg.sender, _amount);
+            _userAssets = _amount;
         } else {
             // Otherwise, we ask the protocol for the missing funds
             uint256 _protocolDebt = _amount - amountFreed;
@@ -173,7 +179,7 @@ contract Strategy is Pausable, ReentrancyGuard {
         }
     }
 
-    function pauseWork() external onlyAuthorized {
+    function pauseWork() external onlyGovernance {
         _pause();
 
         uint256 amountFreed;
@@ -209,6 +215,7 @@ contract Strategy is Pausable, ReentrancyGuard {
         uint256 rewardsAmount = _claimRewards();
         uint256 rewardsProfit;
         uint256 debtPayment = 0;
+        uint256 totalProfit;
 
         if (emergencyExit) {
             uint256 amountFreed;
@@ -219,20 +226,18 @@ contract Strategy is Pausable, ReentrancyGuard {
             } else if (amountFreed > debtOutstanding) {
                 profit = amountFreed - debtOutstanding;
             }
-            debtPayment = debtOutstanding - loss;
+            totalProfit = profit + rewardsProfit;
+            debtPayment = debtOutstanding + totalProfit - loss;
         } else {
             (profit, loss) = prepareReturn(debtOutstanding);
 
             if (rewardsAmount > minRewardsAmount) {
                 rewardsProfit = _swapRewardsToWantToken(rewardsAmount);
             }
+            totalProfit = profit + rewardsProfit;
         }
 
-        debtOutstanding = vault.report(
-            profit + rewardsProfit,
-            loss,
-            debtPayment
-        );
+        debtOutstanding = vault.report(totalProfit, loss, debtPayment);
         lastReport = block.timestamp;
 
         adjustPosition();
@@ -243,19 +248,6 @@ contract Strategy is Pausable, ReentrancyGuard {
             loss,
             debtOutstanding,
             debtPayment
-        );
-    }
-
-    function migrate(address _newStrategy) external onlyVault {
-        require(IStrategy(_newStrategy).getVaultAddr() == vaultAddr);
-
-        _pause();
-        _liquidateAllPositions();
-
-        SafeERC20.safeTransfer(
-            want,
-            _newStrategy,
-            want.balanceOf(address(this))
         );
     }
 

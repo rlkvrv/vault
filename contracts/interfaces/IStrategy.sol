@@ -20,5 +20,5 @@ interface IStrategy {
 
     function getVaultAddr() external view returns (address);
 
-    function migrate(address _newStrategy) external;
+    function pauseWork() external;
 }
