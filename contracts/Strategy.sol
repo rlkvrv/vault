@@ -246,16 +246,22 @@ contract Strategy is Pausable, ReentrancyGuard {
         );
     }
 
-    function migrate(address _newStrategy) external onlyVault {
+    function migrate(address _newStrategy)
+        external
+        onlyVault
+        returns (uint256 balance)
+    {
         require(IStrategy(_newStrategy).getVaultAddr() == vaultAddr);
 
         _pause();
         _liquidateAllPositions();
 
+        balance = want.balanceOf(address(this));
+
         SafeERC20.safeTransfer(
             want,
             _newStrategy,
-            want.balanceOf(address(this))
+            balance
         );
     }
 

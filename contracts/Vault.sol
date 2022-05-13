@@ -71,7 +71,13 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
 
     event UpdateManagement(address management);
 
-    event StrategyMigrated(address oldVersion, address newVersion);
+    event StrategyMigrated(
+        address oldVersion,
+        uint256 gainOldVersion,
+        uint256 lossOldVersion,
+        address newVersion,
+        uint256 totalDebtNewVersion
+    );
 
     event UpdateMaxStrategies(uint256 amount);
 
@@ -247,7 +253,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             totalDebt += gain;
             _assessFees(msg.sender, gain);
         }
-        
+
         uint256 credit = asset.balanceOf(address(this));
 
         if (credit > 0 && debtPayment == 0) {
@@ -279,31 +285,48 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
         );
     }
 
-    function migrateStrategy(address oldVersion, address newVersion)
-        external
-        onlyAuthorized
-    {
+    function migrateStrategy(
+        address oldVersion,
+        address newVersion,
+        uint256 _performanceFee
+    ) external onlyAuthorized {
         require(newVersion != address(0));
         require(
             strategies[oldVersion].activation > 0 &&
                 strategies[newVersion].activation == 0
         );
 
-        StrategyParams memory oldStrategy = strategies[oldVersion];
+        uint256 strategyBalance = IStrategy(oldVersion).migrate(newVersion);
+        uint256 debtOldVersion = strategies[oldVersion].totalDebt;
+        uint256 gainOldVersion;
+        uint256 lossOldVersion;
+
+        if (strategyBalance > debtOldVersion) {
+            gainOldVersion = strategyBalance - debtOldVersion;
+            strategies[oldVersion].totalGain += gainOldVersion;
+        } else if (debtOldVersion > strategyBalance) {
+            lossOldVersion = debtOldVersion - strategyBalance;
+            strategies[oldVersion].totalLoss += lossOldVersion;
+        }
+
+        strategies[oldVersion].totalDebt = 0;
 
         strategies[newVersion] = StrategyParams({
-            performanceFee: oldStrategy.performanceFee,
+            performanceFee: _performanceFee,
             activation: block.timestamp,
-            lastReport: oldStrategy.lastReport,
-            totalDebt: oldStrategy.totalDebt,
+            lastReport: block.timestamp,
+            totalDebt: strategyBalance,
             totalGain: 0,
             totalLoss: 0
         });
 
-        strategies[oldVersion].totalDebt = 0;
-
-        IStrategy(oldVersion).migrate(newVersion);
-        emit StrategyMigrated(oldVersion, newVersion);
+        emit StrategyMigrated(
+            oldVersion,
+            gainOldVersion,
+            lossOldVersion,
+            newVersion,
+            strategyBalance
+        );
 
         for (uint256 i; i < withdrawalQueue.length; i++) {
             if (withdrawalQueue[i] == oldVersion) {
@@ -384,9 +407,11 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
 
         uint256 _currentDebt = strategies[_strategy].totalDebt;
 
-        uint256 _managementFee = _currentDebt * managementFee * duration / (MAX_BPS * SECS_PER_YEAR);
+        uint256 _managementFee = (_currentDebt * managementFee * duration) /
+            (MAX_BPS * SECS_PER_YEAR);
 
-        uint256 perfomanceFee = gain * strategies[_strategy].performanceFee / MAX_BPS;
+        uint256 perfomanceFee = (gain * strategies[_strategy].performanceFee) /
+            MAX_BPS;
 
         uint256 totalFee = perfomanceFee + _managementFee;
 
