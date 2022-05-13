@@ -234,6 +234,20 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             strategies[msg.sender].activation > 0,
             "Vault: ONLY_APPROVED_STRATEGY"
         );
+
+        if (loss > 0) {
+            strategies[msg.sender].totalLoss += loss;
+            strategies[msg.sender].totalDebt -= loss;
+            totalDebt -= loss;
+        }
+
+        if (gain > 0) {
+            strategies[msg.sender].totalGain += gain;
+            strategies[msg.sender].totalDebt += gain;
+            totalDebt += gain;
+            _assessFees(msg.sender, gain);
+        }
+        
         uint256 credit = asset.balanceOf(address(this));
 
         if (credit > 0 && debtPayment == 0) {
@@ -248,19 +262,6 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             );
             strategies[msg.sender].totalDebt -= debtPayment;
             totalDebt -= debtPayment;
-        }
-
-        if (gain > 0) {
-            strategies[msg.sender].totalGain += gain;
-            strategies[msg.sender].totalDebt += gain;
-            totalDebt += gain;
-            _assessFees(msg.sender, gain);
-        }
-
-        if (loss > 0) {
-            strategies[msg.sender].totalLoss += loss;
-            strategies[msg.sender].totalDebt -= loss;
-            totalDebt -= loss;
         }
 
         debt = debtOutstanding(msg.sender);
