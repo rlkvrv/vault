@@ -261,11 +261,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             strategies[msg.sender].totalDebt += credit;
             totalDebt += credit;
         } else if (debtPayment > 0) {
-            asset.safeTransferFrom(
-                msg.sender,
-                address(this),
-                debtPayment + gain
-            );
+            asset.safeTransferFrom(msg.sender, address(this), debtPayment);
             strategies[msg.sender].totalDebt -= debtPayment;
             totalDebt -= debtPayment;
         }

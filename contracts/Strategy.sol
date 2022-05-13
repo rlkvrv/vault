@@ -209,6 +209,7 @@ contract Strategy is Pausable, ReentrancyGuard {
         uint256 rewardsAmount = _claimRewards();
         uint256 rewardsProfit;
         uint256 debtPayment = 0;
+        uint256 totalProfit;
 
         if (emergencyExit) {
             uint256 amountFreed;
@@ -219,17 +220,19 @@ contract Strategy is Pausable, ReentrancyGuard {
             } else if (amountFreed > debtOutstanding) {
                 profit = amountFreed - debtOutstanding;
             }
-            debtPayment = debtOutstanding - loss;
+            totalProfit = profit + rewardsProfit;
+            debtPayment = debtOutstanding + totalProfit - loss;
         } else {
             (profit, loss) = prepareReturn(debtOutstanding);
 
             if (rewardsAmount > minRewardsAmount) {
                 rewardsProfit = _swapRewardsToWantToken(rewardsAmount);
             }
+            totalProfit = profit + rewardsProfit;
         }
 
         debtOutstanding = vault.report(
-            profit + rewardsProfit,
+            totalProfit,
             loss,
             debtPayment
         );
