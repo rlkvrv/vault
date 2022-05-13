@@ -292,16 +292,21 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
                 strategies[newVersion].activation == 0
         );
 
-        uint256 strategyBalance = IStrategy(oldVersion).migrate(newVersion);
+        IStrategy(oldVersion).pauseWork();
+        (uint256 withdrawalFromOldStrategy, , ) = IStrategy(oldVersion)
+            .withdraw(asset.balanceOf(oldVersion));
+
+        asset.safeTransfer(newVersion, withdrawalFromOldStrategy);
+
         uint256 debtOldVersion = strategies[oldVersion].totalDebt;
         uint256 gainOldVersion;
         uint256 lossOldVersion;
 
-        if (strategyBalance > debtOldVersion) {
-            gainOldVersion = strategyBalance - debtOldVersion;
+        if (withdrawalFromOldStrategy > debtOldVersion) {
+            gainOldVersion = withdrawalFromOldStrategy - debtOldVersion;
             strategies[oldVersion].totalGain += gainOldVersion;
-        } else if (debtOldVersion > strategyBalance) {
-            lossOldVersion = debtOldVersion - strategyBalance;
+        } else if (debtOldVersion > withdrawalFromOldStrategy) {
+            lossOldVersion = debtOldVersion - withdrawalFromOldStrategy;
             strategies[oldVersion].totalLoss += lossOldVersion;
         }
 
@@ -311,7 +316,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             performanceFee: _performanceFee,
             activation: block.timestamp,
             lastReport: block.timestamp,
-            totalDebt: strategyBalance,
+            totalDebt: withdrawalFromOldStrategy,
             totalGain: 0,
             totalLoss: 0
         });
@@ -321,7 +326,7 @@ contract Vault is IVault, ERC20, ReentrancyGuard {
             gainOldVersion,
             lossOldVersion,
             newVersion,
-            strategyBalance
+            withdrawalFromOldStrategy
         );
 
         for (uint256 i; i < withdrawalQueue.length; i++) {
