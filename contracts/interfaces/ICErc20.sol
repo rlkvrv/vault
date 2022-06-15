@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.10;
+pragma solidity 0.8.11;
 
 interface ICErc20 {
     function balanceOf(address owner) external view returns (uint256);
