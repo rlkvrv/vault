@@ -2,23 +2,30 @@ const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 
 const daiAddr = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
-const userAddr = "0x7182A1B9CF88e87b83E936d3553c91f9E7BeBDD7";  // адрес, на котором есть DAI
 const cTokenAddr = '0x5d3a536e4d6dbd6114cc1ead35777bab948e3643';
 const compTokenAddr = '0xc00e94Cb662C3520282E6f5717214004A7f26888';
+const uniswapV2RouterAddr = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D';
 
 const erc20AbiJson = [
     'function balanceOf(address) external view returns (uint)',
     'function transfer(address dst, uint wad) external returns(bool)',
     'function approve(address usr, uint wad) external returns(bool)'
 ];
+
 const cTokenAbi = [
     'function balanceOfUnderlying(address owner) external returns (uint)',
     'function balanceOf(address owner) external view returns(uint)'
 ];
+
 const compTokenAbi = [
     'function balanceOf(address owner) external view returns(uint)',
     'function getCurrentVotes(address account) returns(uint96)',
     'function approve(address spender, uint rawAmount) external returns (bool)'
+]
+
+const uniswapV2RouterAbi = [
+    'function swapETHForExactTokens(uint amountOut, address[] calldata path, address to, uint deadline) external payable returns(uint[] memory amounts)',
+    'function WETH() external pure returns (address)',
 ]
 
 describe("Strategy", function () {
@@ -30,30 +37,37 @@ describe("Strategy", function () {
     let owner;
     let signer;
     let mockAcc1;
+    let uniswapV2Router;
     let decimals = Math.pow(10, 18);
     let decimalsBigInt = 10n ** 18n;
 
     beforeEach(async function () {
-        [owner, mockAcc1] = await ethers.getSigners();
-
-        await network.provider.request({
-            method: 'hardhat_impersonateAccount',
-            params: [userAddr],
-        });
-        signer = await ethers.getSigner(userAddr);
+        [owner, signer, mockAcc1] = await ethers.getSigners();
 
         daiToken = new ethers.Contract(daiAddr, erc20AbiJson, owner);
         cToken = new ethers.Contract(cTokenAddr, cTokenAbi, owner);
         compToken = new ethers.Contract(compTokenAddr, compTokenAbi, owner);
+        uniswapV2Router = new ethers.Contract(uniswapV2RouterAddr, uniswapV2RouterAbi, owner);
+
 
         const Vault = await ethers.getContractFactory("Vault", owner);
         vault = await (await Vault.deploy(daiToken.address)).deployed();
+
+        // swap 1000 ETH to 1000 DAI
+        await uniswapV2Router.swapETHForExactTokens(
+            ethers.utils.parseEther('1000'),
+            [uniswapV2Router.WETH(), daiAddr],
+            signer.address,
+            new Date().getTime(),
+            { value: ethers.utils.parseEther('1000') }
+        )
 
         await daiToken.connect(signer).approve(vault.address, 1000n * decimalsBigInt);
 
         const Strategy = await ethers.getContractFactory("Strategy", owner);
         strategy = await (await Strategy.deploy(vault.address, cToken.address)).deployed();
 
+        // 100 it's 1% perfomanceFee
         await vault.addStrategy(strategy.address, 100);
         await vault.connect(signer).deposit(1000n * decimalsBigInt, signer.address);
 
